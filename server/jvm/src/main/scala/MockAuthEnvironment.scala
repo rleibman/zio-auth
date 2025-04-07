@@ -55,29 +55,28 @@ object MockAuthEnvironment {
   //
   //  }
 
-
   case class MockUser(
-                       userId: MockUserId,
-                       password: String,
-                       email: String
-                     )
+    userId:   MockUserId,
+    password: String,
+    email:    String
+  )
 
   case class MockAuthServer(ref: Ref[Map[MockUserId, MockUser]]) extends AuthServer[MockUser, MockUserId] {
 
     override def getPK(user: MockUser): MockUserId = user.userId
 
     override def login(
-                        loginName: String,
-                        password: String
-                      ): ZIO[Any, AuthError, Option[MockUser]] =
+      loginName: String,
+      password:  String
+    ): ZIO[Any, AuthError, Option[MockUser]] =
       ref.get.map(_.values.find(u => u.email == loginName && u.password == password))
 
     override def logout(): ZIO[Session[MockUser], AuthError, Unit] = ???
 
     override def changePassword(
-                                 userPK: MockUserId,
-                                 newPassword: String
-                               ): ZIO[Any, AuthError, Unit] =
+      userPK:      MockUserId,
+      newPassword: String
+    ): ZIO[Any, AuthError, Unit] =
       ref.update(map => map ++ map.get(userPK).map(u => userPK -> u.copy(password = newPassword)).toMap)
 
     override def userByEmail(email: String): ZIO[Any, AuthError, Option[MockUser]] =
@@ -89,7 +88,12 @@ object MockAuthEnvironment {
 
   val mock: ULayer[AuthEnvironment[MockUser, MockUserId]] = ZLayer.make[AuthEnvironment[MockUser, MockUserId]](
     ZLayer.succeed(config),
-    ZLayer.fromZIO(Ref.make(Map(MockUserId(1) -> MockUser(userId = MockUserId(1), password = "aoeu", email = "aoeu"))).map(ref => MockAuthServer(ref): AuthServer[MockUser, MockUserId]))
+    ZLayer.fromZIO(
+      Ref
+        .make(Map(MockUserId(1) -> MockUser(userId = MockUserId(1), password = "aoeu", email = "aoeu"))).map(ref =>
+          MockAuthServer(ref): AuthServer[MockUser, MockUserId]
+        )
+    )
   )
 
 }

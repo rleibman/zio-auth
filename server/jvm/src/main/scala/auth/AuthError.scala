@@ -24,6 +24,7 @@ package auth
 import zio.json.JsonError.Message
 
 object AuthError {
+
   import scala.language.unsafeNulls
 
   def apply(message: String):    AuthError = new AuthError(message, null)

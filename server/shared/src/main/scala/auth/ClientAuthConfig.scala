@@ -24,12 +24,12 @@ package auth
 import zio.json.*
 
 case class ClientAuthConfig(
-                             requestPasswordRecoveryUrl: String,
-                             requestRegistrationUrl: String,
-                             loginUrl: String,
-                             logoutUrl: String,
-                             refreshUrl: String,
-                             whoAmIUrl: String,
-                           )
+  requestPasswordRecoveryUrl: String,
+  requestRegistrationUrl:     String,
+  loginUrl:                   String,
+  logoutUrl:                  String,
+  refreshUrl:                 String,
+  whoAmIUrl:                  String
+)
 
 given JsonCodec[ClientAuthConfig] = JsonCodec.derived

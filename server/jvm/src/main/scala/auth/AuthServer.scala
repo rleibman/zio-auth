@@ -82,7 +82,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
       Method.POST / "api" / "changePassword" -> handler { (req: Request) =>
         for {
           session <- ZIO.service[Session[UserType]]
-          body <- req.body.asString.mapError(e => AuthError(e.getMessage, e))
+          body    <- req.body.asString.mapError(e => AuthError(e.getMessage, e))
           newPass = body // Assuming the body contains the new password
           _ <- changePassword(getPK(session.user), newPass)
         } yield Response.ok
@@ -98,19 +98,22 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
     } yield Routes(
       Method.POST / config.requestPasswordRecoveryUrl -> handler((req: Request) => ???),
       Method.POST / config.confirmPasswordRecoveryUrl -> handler((req: Request) => ???),
-      Method.POST / config.requestRegistrationUrl -> handler((req: Request) => ???),
-      Method.POST / config.confirmRegistrationUrl -> handler((req: Request) => ???),
-      Method.GET / "api" / "clientAuthConfig" -> handler((_: Request) => Response.json(ClientAuthConfig(
-        requestPasswordRecoveryUrl = config.requestPasswordRecoveryUrl,
-        requestRegistrationUrl = config.requestRegistrationUrl,
-        loginUrl = config.loginUrl,
-        logoutUrl = config.logoutUrl,
-        refreshUrl = config.refreshUrl,
-        whoAmIUrl = config.whoAmIUrl,
-      ).toJson)),
+      Method.POST / config.requestRegistrationUrl     -> handler((req: Request) => ???),
+      Method.POST / config.confirmRegistrationUrl     -> handler((req: Request) => ???),
+      Method.GET / "api" / "clientAuthConfig" -> handler((_: Request) =>
+        Response.json(
+          ClientAuthConfig(
+            requestPasswordRecoveryUrl = config.requestPasswordRecoveryUrl,
+            requestRegistrationUrl = config.requestRegistrationUrl,
+            loginUrl = config.loginUrl,
+            logoutUrl = config.logoutUrl,
+            refreshUrl = config.refreshUrl,
+            whoAmIUrl = config.whoAmIUrl
+          ).toJson
+        )
+      ),
       Method.GET / config.loginUrl -> handler { (_: Request) =>
-        ZIO.succeed(Response.html(Html.raw(
-          s"""<html>
+        ZIO.succeed(Response.html(Html.raw(s"""<html>
              |<head>
              |  <title>Login</title>
              |</head>
@@ -126,10 +129,10 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
       Method.POST / config.loginUrl -> handler { (req: Request) =>
         (for {
           formData <- req.formData
-          email <- ZIO.fromOption(formData.get("email")).orElseFail(AuthError("Missing email"))
+          email    <- ZIO.fromOption(formData.get("email")).orElseFail(AuthError("Missing email"))
           password <- ZIO.fromOption(formData.get("password")).orElseFail(AuthError("Missing Password"))
-          login <- login(email, password)
-          _ <- login.fold(ZIO.logDebug(s"Bad login for $email"))(_ => ZIO.logDebug(s"Good Login for $email"))
+          login    <- login(email, password)
+          _        <- login.fold(ZIO.logDebug(s"Bad login for $email"))(_ => ZIO.logDebug(s"Good Login for $email"))
           loginFormBadUrl <- ZIO
             .fromEither(URL.decode(config.loginFormBadUrl)).mapError(e => AuthError(e.getMessage, e))
           res <- login.fold(ZIO.succeed(Response(Status.SeeOther, Headers(Header.Location(loginFormBadUrl))))) { user =>
@@ -144,12 +147,12 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
     )
 
   protected def addTokens(
-                           session: Session[UserType],
-                           response: Response
-                         ): URIO[AuthConfig, Response] =
+    session:  Session[UserType],
+    response: Response
+  ): URIO[AuthConfig, Response] =
     for {
-      config <- ZIO.service[AuthConfig]
-      accessToken <- jwtEncode(session, config.accessTTL)
+      config       <- ZIO.service[AuthConfig]
+      accessToken  <- jwtEncode(session, config.accessTTL)
       refreshToken <- jwtEncode(session, config.refreshTTL)
     } yield response
       .addHeader(Header.Authorization.Bearer(accessToken))
@@ -167,15 +170,15 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
       )
 
   def refreshSession(
-                      request: Request,
-                      response: Response
-                    ): ZIO[AuthConfig, Nothing, Response] =
+    request:  Request,
+    response: Response
+  ): ZIO[AuthConfig, Nothing, Response] =
     (for {
       config <- ZIO.service[AuthConfig]
       // Check to see if the refresh token exists AND is valid, otherwise you can't refresh
       sessionCookieOpt = request.cookies.find(_.name == config.refreshTokenName).map(_.content)
       session <- (for {
-        claim <- ZIO.foreach(sessionCookieOpt)(jwtDecode)
+        claim      <- ZIO.foreach(sessionCookieOpt)(jwtDecode)
         sessionOpt <- ZIO.foreach(claim)(_.session)
         session <- sessionOpt
           .fold(ZIO.logInfo(s"No refresh token at all") *> ZIO.fail(Response.unauthorized))(ZIO.succeed)
@@ -190,35 +193,35 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
     } yield withTokens).catchAll(ZIO.succeed)
 
   def login(
-             userName: String,
-             password: String
-           ): IO[AuthError, Option[UserType]]
+    userName: String,
+    password: String
+  ): IO[AuthError, Option[UserType]]
 
   def logout(): ZIO[Session[UserType], AuthError, Unit]
 
   def changePassword(
-                      userPK: UserPK,
-                      newPassword: String
-                    ): IO[AuthError, Unit]
+    userPK:      UserPK,
+    newPassword: String
+  ): IO[AuthError, Unit]
 
   def userByEmail(email: String): IO[AuthError, Option[UserType]]
 
   def jwtDecode(token: String): ZIO[AuthConfig, AuthError, JwtClaim] =
     (for {
       javaClock <- Clock.javaClock
-      config <- ZIO.service[AuthConfig]
-      tok <- ZIO.fromTry(Jwt(javaClock).decode(token, config.secretKey.key, Seq(JwtAlgorithm.HS512)))
+      config    <- ZIO.service[AuthConfig]
+      tok       <- ZIO.fromTry(Jwt(javaClock).decode(token, config.secretKey.key, Seq(JwtAlgorithm.HS512)))
     } yield tok).mapError {
       case e: JwtExpirationException => ExpiredToken(e.getMessage, e)
-      case e: Throwable => InvalidToken(e.getMessage, e)
+      case e: Throwable              => InvalidToken(e.getMessage, e)
     }
 
   def jwtEncode(
-                 session: Session[UserType],
-                 ttl: Duration
-               ): ZIO[AuthConfig, Nothing, String] =
+    session: Session[UserType],
+    ttl:     Duration
+  ): ZIO[AuthConfig, Nothing, String] =
     for {
-      config <- ZIO.service[AuthConfig]
+      config    <- ZIO.service[AuthConfig]
       javaClock <- Clock.javaClock
     } yield {
       val claim = JwtClaim(session.toJson)
@@ -236,7 +239,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
           case Some(Header.Authorization.Bearer(token)) =>
             for {
               claim <- jwtDecode(token.value.asString)
-              u <- claim.session
+              u     <- claim.session
             } yield Some(u)
           case _ => ZIO.none
         }).catchAll {
@@ -260,10 +263,10 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
     })
 
   /** A typical use of this is if you want to invalidate sessions. (works in tandem with invalidateSession)
-   *
-   * @param session
-   * @return
-   */
+    *
+    * @param session
+    * @return
+    */
   def isInvalid(session: Session[UserType]): IO[AuthError, Boolean] = ZIO.succeed(true)
 
   def invalidateSession(session: Session[UserType]): IO[AuthError, Unit] = ZIO.unit

@@ -26,27 +26,27 @@ import zio.http.*
 import zio.http.Cookie.SameSite
 
 case class AuthConfig(
-                       secretKey: SecretKey,
+  secretKey: SecretKey,
 
-                       // URLs
-                       requestPasswordRecoveryUrl: String = "requestPasswordRecovery",
-                       confirmPasswordRecoveryUrl: String = "confirmPasswordRecovery",
-                       requestRegistrationUrl: String = "requestRegistration",
-                       confirmRegistrationUrl: String = "confirmRegistration",
-                       loginUrl: String = "login",
-                       logoutUrl: String = "logout",
-                       refreshUrl: String = "refresh",
-                       loginFormBadUrl: String = "login?bad=true",
-                       whoAmIUrl: String = "whoami",
+  // URLs
+  requestPasswordRecoveryUrl: String = "requestPasswordRecovery",
+  confirmPasswordRecoveryUrl: String = "confirmPasswordRecovery",
+  requestRegistrationUrl:     String = "requestRegistration",
+  confirmRegistrationUrl:     String = "confirmRegistration",
+  loginUrl:                   String = "login",
+  logoutUrl:                  String = "logout",
+  refreshUrl:                 String = "refresh",
+  loginFormBadUrl:            String = "login?bad=true",
+  whoAmIUrl:                  String = "whoami",
 
-                       // Stuff used for cookie
-                       refreshTokenName: String = "_refreshToken",
-                       accessTokenName: String = "_sessiondata",
-                       sessionDomain: Option[String] = None,
-                       sessionPath: Option[Path] = None,
-                       sessionIsSecure: Boolean = true,
-                       sessionIsHttpOnly: Boolean = true,
-                       sessionSameSite: Option[SameSite] = Some(SameSite.Strict),
-                       accessTTL: Duration = 30.minutes,
-                       refreshTTL: Duration = 30.days
-                     )
+  // Stuff used for cookie
+  refreshTokenName:  String = "_refreshToken",
+  accessTokenName:   String = "_sessiondata",
+  sessionDomain:     Option[String] = None,
+  sessionPath:       Option[Path] = None,
+  sessionIsSecure:   Boolean = true,
+  sessionIsHttpOnly: Boolean = true,
+  sessionSameSite:   Option[SameSite] = Some(SameSite.Strict),
+  accessTTL:         Duration = 30.minutes,
+  refreshTTL:        Duration = 30.days
+)
