@@ -10,9 +10,9 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/login/js" />
-            <option value="$PROJECT_DIR$/login/jvm" />
-            <option value="$PROJECT_DIR$/login/shared" />
+            <option value="$PROJECT_DIR$/auth/js" />
+            <option value="$PROJECT_DIR$/auth/jvm" />
+            <option value="$PROJECT_DIR$/auth/shared" />
             <option value="$PROJECT_DIR$/project" />
             <option value="$PROJECT_DIR$/server/js" />
             <option value="$PROJECT_DIR$/server/jvm" />

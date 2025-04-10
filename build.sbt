@@ -9,8 +9,8 @@ lazy val debugDist = TaskKey[File]("debugDist")
 
 lazy val SCALA = "3.6.3"
 Global / onChangedBuildSource := ReloadOnSourceChanges
-scalaVersion := SCALA
-Global / scalaVersion := SCALA
+scalaVersion                  := SCALA
+Global / scalaVersion         := SCALA
 
 import scala.concurrent.duration.*
 
@@ -18,10 +18,11 @@ Global / watchAntiEntropy := 1.second
 
 val zioConfigVersion = "4.0.4"
 val zioHttpVersion = "3.2.0" // "3.1.0" // this breaks
-val zioJsonVersion = "0.7.39"
+val zioJsonVersion = "0.7.42"
 val zioVersion = "2.1.17"
 val scalajsReactVersion = "2.1.2"
 val reactVersion = "^18.3.0"
+val sttpVersion = "4.0.2"
 
 lazy val scala3Opts = Seq(
   "-deprecation", // Emit warning and location for usages of deprecated APIs.
@@ -46,22 +47,46 @@ lazy val scala3Opts = Seq(
 )
 
 lazy val commonSettings = Seq(
-  organization := "net.leibman",
-  startYear := Some(2025),
+  organization     := "net.leibman",
+  startYear        := Some(2025),
   organizationName := "Roberto Leibman",
-  headerLicense := Some(HeaderLicense.MIT("2025", "Roberto Leibman", HeaderLicenseStyle.Detailed)),
+  headerLicense    := Some(HeaderLicense.MIT("2025", "Roberto Leibman", HeaderLicenseStyle.Detailed)),
   resolvers += Resolver.mavenLocal,
   scalacOptions ++= scala3Opts
 )
 
 //React app that manages the login workflow
-lazy val login = crossProject(JSPlatform, JVMPlatform)
+lazy val auth = crossProject(JSPlatform, JVMPlatform)
   .enablePlugins(
     AutomateHeaderPlugin,
-    GitVersioning,
+    GitVersioning
   )
-  .in(file("login"))
+  .in(file("auth"))
   .settings(commonSettings)
+  .jvmSettings(
+    libraryDependencies ++= Seq(
+      // Log
+      "ch.qos.logback" % "logback-classic" % "1.5.18" withSources (),
+      // ZIO
+      "dev.zio"                %% "zio"                   % zioVersion withSources (),
+      "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
+      "dev.zio"                %% "zio-cache"             % "0.2.4" withSources (),
+      "dev.zio"                %% "zio-config"            % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-config-derivation" % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-config-magnolia"   % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.0" withSources (),
+      "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
+      "com.github.jwt-scala"   %% "jwt-circe"             % "10.0.4" withSources (),
+      "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
+      "org.scala-lang.modules" %% "scala-xml"             % "2.3.0" withSources (),
+      // Other random utilities
+      "com.github.daddykotex" %% "courier" % "4.0.0-RC1" withSources (),
+      // Testing
+      "dev.zio" %% "zio-test"     % zioVersion % "test" withSources (),
+      "dev.zio" %% "zio-test-sbt" % zioVersion % "test" withSources ()
+    )
+  )
   .jsEnablePlugins(ScalaJSBundlerPlugin)
   .jsSettings(
     webpack / version := "5.96.1",
@@ -69,26 +94,32 @@ lazy val login = crossProject(JSPlatform, JVMPlatform)
       ((fastOptJS / moduleName).value + "-opt.js")),
     Compile / fullOptJS / artifactPath := ((Compile / fullOptJS / crossTarget).value /
       ((fullOptJS / moduleName).value + "-opt.js")),
-    useYarn := true,
-    run / fork := true,
-    Global / scalaJSStage := FastOptStage,
+    webpackEmitSourceMaps := false,
+    scalaJSLinkerConfig ~= {
+      _.withSourceMap(false) // .withRelativizeSourceMapBase(None)
+    },
+    useYarn                                   := true,
+    run / fork                                := true,
+    Global / scalaJSStage                     := FastOptStage,
     Compile / scalaJSUseMainModuleInitializer := true,
     libraryDependencies ++= Seq(
-      "org.scala-js" %%% "scalajs-dom" % "2.8.0" withSources(),
-      "com.github.japgolly.scalajs-react" %%% "core" % scalajsReactVersion withSources(),
-      "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources(),
-      "com.lihaoyi" %%% "scalatags" % "0.13.1" withSources(),
-      "dev.zio" %%% "zio-json" % zioJsonVersion withSources(),
+      "com.softwaremill.sttp.client4" %%% "core"      % sttpVersion withSources (),
+      "com.softwaremill.sttp.client4" %%% "zio-json"  % sttpVersion withSources (),
+      "org.scala-js" %%% "scalajs-dom"                % "2.8.0" withSources (),
+      "com.github.japgolly.scalajs-react" %%% "core"  % scalajsReactVersion withSources (),
+      "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources (),
+      "com.lihaoyi" %%% "scalatags"                   % "0.13.1" withSources (),
+      "dev.zio" %%% "zio-json"                        % zioJsonVersion withSources ()
     ),
     Compile / npmDependencies ++= Seq(
-      "@types/react" -> reactVersion,
+      "@types/react"     -> reactVersion,
       "@types/react-dom" -> reactVersion,
-      "react" -> reactVersion,
-      "react-dom" -> reactVersion,
+      "react"            -> reactVersion,
+      "react-dom"        -> reactVersion
     ),
     debugDist := {
 
-      val assets = (ThisBuild / baseDirectory).value / "login" / "js" / "src" / "main" / "web"
+      val assets = (ThisBuild / baseDirectory).value / "auth" / "js" / "src" / "main" / "web"
 
       val artifacts = (Compile / fastOptJS / webpack).value
       val artifactFolder = (Compile / fastOptJS / crossTarget).value
@@ -98,7 +129,7 @@ lazy val login = crossProject(JSPlatform, JVMPlatform)
       FileUtils.copyDirectory(assets, debugFolder, true)
       artifacts.foreach { artifact =>
         val target = artifact.data.relativeTo(artifactFolder) match {
-          case None => debugFolder / artifact.data.name
+          case None          => debugFolder / artifact.data.name
           case Some(relFile) => debugFolder / relFile.toString
         }
 
@@ -109,7 +140,7 @@ lazy val login = crossProject(JSPlatform, JVMPlatform)
       debugFolder
     },
     dist := {
-      val assets = (ThisBuild / baseDirectory).value / "login" / "js" / "src" / "main" / "web"
+      val assets = (ThisBuild / baseDirectory).value / "auth" / "js" / "src" / "main" / "web"
 
       val artifacts = (Compile / fullOptJS / webpack).value
       val artifactFolder = (Compile / fullOptJS / crossTarget).value
@@ -119,7 +150,7 @@ lazy val login = crossProject(JSPlatform, JVMPlatform)
       FileUtils.copyDirectory(assets, distFolder, true)
       artifacts.foreach { artifact =>
         val target = artifact.data.relativeTo(artifactFolder) match {
-          case None => distFolder / artifact.data.name
+          case None          => distFolder / artifact.data.name
           case Some(relFile) => distFolder / relFile.toString
         }
 
@@ -134,32 +165,33 @@ lazy val login = crossProject(JSPlatform, JVMPlatform)
 lazy val server = crossProject(JSPlatform, JVMPlatform)
   .enablePlugins(
     AutomateHeaderPlugin,
-    GitVersioning,
+    GitVersioning
   )
+  .dependsOn(auth)
   .in(file("server"))
   .settings(commonSettings)
   .jvmSettings(
     libraryDependencies ++= Seq(
       // Log
-      "ch.qos.logback" % "logback-classic" % "1.5.18" withSources(),
+      "ch.qos.logback" % "logback-classic" % "1.5.18" withSources (),
       // ZIO
-      "dev.zio" %% "zio" % zioVersion withSources(),
-      "dev.zio" %% "zio-nio" % "2.0.2" withSources(),
-      "dev.zio" %% "zio-cache" % "0.2.4" withSources(),
-      "dev.zio" %% "zio-config" % zioConfigVersion withSources(),
-      "dev.zio" %% "zio-config-derivation" % zioConfigVersion withSources(),
-      "dev.zio" %% "zio-config-magnolia" % zioConfigVersion withSources(),
-      "dev.zio" %% "zio-config-typesafe" % zioConfigVersion withSources(),
-      "dev.zio" %% "zio-logging-slf4j2" % "2.5.0" withSources(),
-      "dev.zio" %% "zio-http" % zioHttpVersion withSources(),
-      "com.github.jwt-scala" %% "jwt-circe" % "10.0.4" withSources(),
-      "dev.zio" %% "zio-json" % zioJsonVersion withSources(),
-      "org.scala-lang.modules" %% "scala-xml" % "2.3.0" withSources(),
+      "dev.zio"                %% "zio"                   % zioVersion withSources (),
+      "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
+      "dev.zio"                %% "zio-cache"             % "0.2.4" withSources (),
+      "dev.zio"                %% "zio-config"            % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-config-derivation" % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-config-magnolia"   % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.0" withSources (),
+      "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
+      "com.github.jwt-scala"   %% "jwt-circe"             % "10.0.4" withSources (),
+      "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
+      "org.scala-lang.modules" %% "scala-xml"             % "2.3.0" withSources (),
       // Other random utilities
-      "com.github.daddykotex" %% "courier" % "4.0.0-RC1" withSources(),
+      "com.github.daddykotex" %% "courier" % "4.0.0-RC1" withSources (),
       // Testing
-      "dev.zio" %% "zio-test" % zioVersion % "test" withSources(),
-      "dev.zio" %% "zio-test-sbt" % zioVersion % "test" withSources()
+      "dev.zio" %% "zio-test"     % zioVersion % "test" withSources (),
+      "dev.zio" %% "zio-test-sbt" % zioVersion % "test" withSources ()
     )
   )
   .jsEnablePlugins(ScalaJSBundlerPlugin)
@@ -169,22 +201,26 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
       ((fastOptJS / moduleName).value + "-opt.js")),
     Compile / fullOptJS / artifactPath := ((Compile / fullOptJS / crossTarget).value /
       ((fullOptJS / moduleName).value + "-opt.js")),
-    useYarn := true,
-    run / fork := true,
-    Global / scalaJSStage := FastOptStage,
+    webpackEmitSourceMaps := false,
+    scalaJSLinkerConfig ~= {
+      _.withSourceMap(false) // .withRelativizeSourceMapBase(None)
+    },
+    useYarn                                   := true,
+    run / fork                                := true,
+    Global / scalaJSStage                     := FastOptStage,
     Compile / scalaJSUseMainModuleInitializer := true,
     libraryDependencies ++= Seq(
-      "org.scala-js" %%% "scalajs-dom" % "2.8.0" withSources(),
-      "com.github.japgolly.scalajs-react" %%% "core" % scalajsReactVersion withSources(),
-      "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources(),
-      "com.lihaoyi" %%% "scalatags" % "0.13.1" withSources(),
-      "dev.zio" %%% "zio-json" % zioJsonVersion withSources(),
+      "org.scala-js" %%% "scalajs-dom"                % "2.8.0" withSources (),
+      "com.github.japgolly.scalajs-react" %%% "core"  % scalajsReactVersion withSources (),
+      "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources (),
+      "com.lihaoyi" %%% "scalatags"                   % "0.13.1" withSources (),
+      "dev.zio" %%% "zio-json"                        % zioJsonVersion withSources ()
     ),
     Compile / npmDependencies ++= Seq(
-      "@types/react" -> reactVersion,
+      "@types/react"     -> reactVersion,
       "@types/react-dom" -> reactVersion,
-      "react" -> reactVersion,
-      "react-dom" -> reactVersion,
+      "react"            -> reactVersion,
+      "react-dom"        -> reactVersion
     ),
     debugDist := {
 
@@ -198,7 +234,7 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
       FileUtils.copyDirectory(assets, debugFolder, true)
       artifacts.foreach { artifact =>
         val target = artifact.data.relativeTo(artifactFolder) match {
-          case None => debugFolder / artifact.data.name
+          case None          => debugFolder / artifact.data.name
           case Some(relFile) => debugFolder / relFile.toString
         }
 
@@ -219,7 +255,7 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
       FileUtils.copyDirectory(assets, distFolder, true)
       artifacts.foreach { artifact =>
         val target = artifact.data.relativeTo(artifactFolder) match {
-          case None => distFolder / artifact.data.name
+          case None          => distFolder / artifact.data.name
           case Some(relFile) => distFolder / relFile.toString
         }
 
@@ -231,14 +267,13 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
     }
   )
 
-
 //////////////////////////////////////////////////////////////////////////////////////////////////
 // Root project
 lazy val root = project
   .in(file("."))
-  .aggregate(server.js, server.jvm, login.js)
+  .aggregate(server.js, server.jvm, auth.js)
   .settings(
-    name := "zio-auth",
+    name           := "zio-auth",
     publish / skip := true,
-    version := "0.1.0"
+    version        := "0.1.0"
   )

@@ -19,8 +19,12 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+import auth.*
+import japgolly.scalajs.react.component.ScalaFn.Component
 import japgolly.scalajs.react.vdom.html_<^.*
+import japgolly.scalajs.react.{CtorType, *}
 import org.scalajs.dom
+import zio.json.ast.Json
 
 import scala.scalajs.js.annotation.JSExport
 
@@ -28,8 +32,33 @@ object AuthTestApp {
 
   @JSExport
   def main(args: Array[String]): Unit = {
-    val component = <.div("Hello, world!")
-    component.renderIntoDOM(dom.document.getElementById("content"))
+    val component: Component[Unit, CtorType.Nullary] = ScalaFnComponent
+      .withHooks[Unit]
+      .useState(None: Option[Json])
+      .useEffectOnMountBy {
+        (
+          _,
+          user
+        ) => AuthClient.whoami[Json]().map(j => user.modState(_ => j)).completeWith(_.get)
+      }
+      .render($ =>
+        $.hook1.value.fold(
+          <.div(LoginRouter()())
+        )(user =>
+          <.div(
+            <.h1("Welcome"),
+            <.p(s"Hello $user"),
+            <.button(
+              ^.onClick --> AuthClient
+                .logout()
+                .map(_ => $.hook1.modState(_ => None))
+                .completeWith(_ => $.hook1.modState(_ => None))
+            )("Logout")
+          )
+        )
+      )
+
+    component().renderIntoDOM(dom.document.getElementById("content"))
     ()
 
   }

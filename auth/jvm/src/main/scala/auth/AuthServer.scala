@@ -26,14 +26,26 @@ import pdi.jwt.*
 import pdi.jwt.exceptions.JwtExpirationException
 import zio.*
 import zio.http.*
-import zio.http.template.Html
+import zio.http.Cookie.SameSite
 import zio.json.*
+
+import java.nio.file.{Files, Paths as JPaths}
 
 trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
 
   given JsonEncoder[Session[UserType]] = JsonEncoder.derived
 
   given JsonDecoder[Session[UserType]] = JsonDecoder.derived
+
+  private def file(
+    fileName: String
+  ): IO[AuthError, java.io.File] = {
+    JPaths.get(fileName) match {
+      case path: java.nio.file.Path if !Files.exists(path) => ZIO.fail(AuthError(s"NotFound($fileName)"))
+      case path: java.nio.file.Path                        => ZIO.succeed(path.toFile.nn)
+      case null => ZIO.fail(AuthError(s"HttpError.InternalServerError(Could not find file $fileName))"))
+    }
+  }
 
   extension (request: Request) {
 
@@ -96,10 +108,18 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
     for {
       config <- ZIO.service[AuthConfig]
     } yield Routes(
-      Method.POST / config.requestPasswordRecoveryUrl -> handler((req: Request) => ???),
-      Method.POST / config.confirmPasswordRecoveryUrl -> handler((req: Request) => ???),
-      Method.POST / config.requestRegistrationUrl     -> handler((req: Request) => ???),
-      Method.POST / config.confirmRegistrationUrl     -> handler((req: Request) => ???),
+      Method.GET / config.requestPasswordRecoveryUrl -> handler((req: Request) =>
+        Response.text(config.confirmPasswordRecoveryUrl)
+      ),
+      Method.POST / config.confirmPasswordRecoveryUrl -> handler((req: Request) =>
+        Response.text(config.confirmPasswordRecoveryUrl)
+      ),
+      Method.GET / config.requestRegistrationUrl -> handler((req: Request) =>
+        Response.text(config.requestRegistrationUrl)
+      ),
+      Method.POST / config.confirmRegistrationUrl -> handler((req: Request) =>
+        Response.text(config.confirmRegistrationUrl)
+      ),
       Method.GET / "api" / "clientAuthConfig" -> handler((_: Request) =>
         Response.json(
           ClientAuthConfig(
@@ -112,30 +132,24 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
           ).toJson
         )
       ),
-      Method.GET / config.loginUrl -> handler { (_: Request) =>
-        ZIO.succeed(Response.html(Html.raw(s"""<html>
-             |<head>
-             |  <title>Login</title>
-             |</head>
-             |<body>
-             |  <form method="POST" action="${config.loginUrl}">
-             |    <input type="text" name="email" placeholder="Email" required>
-             |    <input type="password" name="password" placeholder="Password" required>
-             |    <input type="submit" value="Login">
-             |  </form>
-             |</body
-             |</html>""".stripMargin)))
-      },
       Method.POST / config.loginUrl -> handler { (req: Request) =>
+        case class LoginRequest(
+          email:    String,
+          password: String
+        )
+        given JsonDecoder[LoginRequest] = JsonDecoder.derived
+
         (for {
-          formData <- req.formData
-          email    <- ZIO.fromOption(formData.get("email")).orElseFail(AuthError("Missing email"))
-          password <- ZIO.fromOption(formData.get("password")).orElseFail(AuthError("Missing Password"))
-          login    <- login(email, password)
-          _        <- login.fold(ZIO.logDebug(s"Bad login for $email"))(_ => ZIO.logDebug(s"Good Login for $email"))
-          loginFormBadUrl <- ZIO
-            .fromEither(URL.decode(config.loginFormBadUrl)).mapError(e => AuthError(e.getMessage, e))
-          res <- login.fold(ZIO.succeed(Response(Status.SeeOther, Headers(Header.Location(loginFormBadUrl))))) { user =>
+          loginRequest <- req.body.asString.flatMap(s =>
+            ZIO.fromEither(s.fromJson[LoginRequest]).mapError(e => AuthError(s"Could not parse login request: $e"))
+          )
+          login <- login(loginRequest.email, loginRequest.password)
+          _ <- login.fold(ZIO.logDebug(s"Bad login for ${loginRequest.email}"))(_ =>
+            ZIO.logDebug(s"Good Login for ${loginRequest.email}")
+          )
+          res <- login.fold(ZIO.succeed {
+            Response.unauthorized("Could not log on, sorry")
+          }) { user =>
             addTokens(
               Session(user),
               Response.redirect(URL.root)
@@ -143,7 +157,17 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
           }
         } yield res).mapError(AuthError(_))
       },
-      Method.POST / config.refreshUrl -> handler((req: Request) => ???)
+      Method.POST / config.refreshUrl -> handler((req: Request) => ???),
+      Method.GET / Root -> handler { (_: Request) =>
+        Handler.fromFileZIO(file(s"${config.staticContentDir}/index.html")).mapError(AuthError(_))
+      }.flatten,
+      Method.GET / trailing -> handler {
+        (
+          path: Path,
+          _:    Request
+        ) =>
+          Handler.fromFileZIO(file(s"${config.staticContentDir}/${path.toString}")).mapError(AuthError(_))
+      }.flatten
     )
 
   protected def addTokens(
@@ -161,11 +185,11 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
           name = config.refreshTokenName,
           content = refreshToken,
           maxAge = Option(config.refreshTTL.plus(1.hour)),
-          domain = config.sessionDomain,
-          path = config.sessionPath,
-          isSecure = config.sessionIsSecure,
-          isHttpOnly = config.sessionIsHttpOnly,
-          sameSite = config.sessionSameSite
+          domain = None,
+          path = Option(Path.decode("/api/refresh")),
+          isSecure = true,
+          isHttpOnly = true,
+          sameSite = Some(SameSite.Strict)
         )
       )
 
