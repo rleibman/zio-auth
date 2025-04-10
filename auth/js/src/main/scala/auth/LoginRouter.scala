@@ -24,13 +24,13 @@ package auth
 import japgolly.scalajs.react.extra.router.*
 import japgolly.scalajs.react.vdom.html_<^.*
 
+enum LoginPages {
+
+  case Index, Login, requestLostPassword, confirmLostPassword, requestRegistration, confirmRegistration
+
+}
+
 object LoginRouter {
-
-  enum LoginPages {
-
-    case Login, requestLostPassword, confirmLostPassword, requestRegistration, confirmRegistration
-
-  }
 
   private def layout(
     page:       RouterCtl[LoginPages],
@@ -45,7 +45,8 @@ object LoginRouter {
 
       (
         trimSlashes |
-          staticRoute("#login", LoginPages.Login) ~> render(LoginPage()) |
+          staticRoute("#index", LoginPages.Index) ~> render(<.div("Should never get here")) |
+          staticRoute("#login", LoginPages.Login) ~> renderR(ctl => LoginPage(ctl)) |
           staticRoute("#requestLostPassword", LoginPages.requestLostPassword) ~> render(RequestLostPasswordPage()) |
           staticRoute("#confirmLostPassword", LoginPages.confirmLostPassword) ~> render(<.div("Hello")) |
           staticRoute("#requestRegistration", LoginPages.requestRegistration) ~> render(RequestRegistrationPage()) |

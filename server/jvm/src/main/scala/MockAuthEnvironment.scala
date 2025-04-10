@@ -90,9 +90,8 @@ object MockAuthEnvironment {
     ZLayer.succeed(config),
     ZLayer.fromZIO(
       Ref
-        .make(Map(MockUserId(1) -> MockUser(userId = MockUserId(1), password = "aoeu", email = "aoeu"))).map(ref =>
-          MockAuthServer(ref): AuthServer[MockUser, MockUserId]
-        )
+        .make(Map(MockUserId(1) -> MockUser(userId = MockUserId(1), password = "aoeu", email = "aoeu@example.com")))
+        .map(ref => MockAuthServer(ref): AuthServer[MockUser, MockUserId])
     )
   )
 

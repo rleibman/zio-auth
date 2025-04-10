@@ -23,6 +23,7 @@ package auth
 
 import auth.given
 import japgolly.scalajs.react.component.ScalaFn.Component
+import japgolly.scalajs.react.extra.router.RouterCtl
 import japgolly.scalajs.react.vdom.html_<^.*
 import japgolly.scalajs.react.{CtorType, *}
 import zio.json.*
@@ -34,8 +35,8 @@ case class LoginPageState(
   error:    Option[String] = None
 )
 
-val LoginPage: Component[Unit, CtorType.Nullary] = ScalaFnComponent
-  .withHooks[Unit]
+val LoginPage: Component[RouterCtl[LoginPages], CtorType.Props] = ScalaFnComponent
+  .withHooks[RouterCtl[LoginPages]]
   .useState(ClientAuthConfig())
   .useState(LoginPageState())
   .useEffectOnMountBy {
@@ -51,7 +52,7 @@ val LoginPage: Component[Unit, CtorType.Nullary] = ScalaFnComponent
   }
   .render(
     (
-      _,
+      ctl,
       config,
       state
     ) =>
@@ -64,8 +65,8 @@ val LoginPage: Component[Unit, CtorType.Nullary] = ScalaFnComponent
               .map {
                 case Left(e) =>
                   state.modState(_.copy(error = Some(e)))
-                case _ => // All's good, we're going to get reloaded, so don't worry about the return value
-                  state.modState(_.copy(error = None))
+                case _ => // All's good, we're going to get reloaded, so don't worry about the return value, but do reset the url
+                  ctl.set(LoginPages.Login) >> state.modState(_.copy(error = None))
               }
               .completeWith(_.get)
         },

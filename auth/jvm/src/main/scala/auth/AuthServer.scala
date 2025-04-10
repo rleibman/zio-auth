@@ -152,7 +152,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
           }) { user =>
             addTokens(
               Session(user),
-              Response.redirect(URL.root)
+              Response.json(user.toJson)
             )
           }
         } yield res).mapError(AuthError(_))
@@ -256,8 +256,9 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
 
   def bearerSessionProvider: HandlerAspect[AuthConfig, Session[UserType]] =
     HandlerAspect.interceptIncomingHandler(Handler.fromFunctionZIO[Request] { request =>
+      val refreshUrl = URL.decode("/refresh").toOption.get
+
       for {
-        refreshURL <- ZIO.fromEither(URL.decode("/refresh")).orDie
         sessionOpt <- (request.header(Header.Authorization) match {
           // We got a bearer token, let's decode it
           case Some(Header.Authorization.Bearer(token)) =>
@@ -273,7 +274,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
             ZIO.fail(Response.badRequest(e.getMessage))
         }
         session <- sessionOpt
-          .fold(ZIO.logInfo(s"No access token at all") *> ZIO.fail(Response.seeOther(refreshURL)))(ZIO.succeed)
+          .fold(ZIO.logInfo(s"No access token at all") *> ZIO.fail(Response.seeOther(refreshUrl)))(ZIO.succeed)
         _ <- ZIO
           .fail(Response.unauthorized)
           .whenZIO(
@@ -291,7 +292,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK] {
     * @param session
     * @return
     */
-  def isInvalid(session: Session[UserType]): IO[AuthError, Boolean] = ZIO.succeed(true)
+  def isInvalid(session: Session[UserType]): IO[AuthError, Boolean] = ZIO.succeed(false)
 
   def invalidateSession(session: Session[UserType]): IO[AuthError, Unit] = ZIO.unit
 
