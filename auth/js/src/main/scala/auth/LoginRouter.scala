@@ -47,9 +47,13 @@ object LoginRouter {
         trimSlashes |
           staticRoute("#index", LoginPages.Index) ~> render(<.div("Should never get here")) |
           staticRoute("#login", LoginPages.Login) ~> renderR(ctl => LoginPage(ctl)) |
-          staticRoute("#requestLostPassword", LoginPages.requestLostPassword) ~> render(RequestLostPasswordPage()) |
+          staticRoute("#requestLostPassword", LoginPages.requestLostPassword) ~> renderR(ctl =>
+            RequestLostPasswordPage(ctl)
+          ) |
           staticRoute("#confirmLostPassword", LoginPages.confirmLostPassword) ~> render(<.div("Hello")) |
-          staticRoute("#requestRegistration", LoginPages.requestRegistration) ~> render(RequestRegistrationPage()) |
+          staticRoute("#requestRegistration", LoginPages.requestRegistration) ~> renderR(ctl =>
+            RequestRegistrationPage(ctl)
+          ) |
           staticRoute("#confirmRegistration", LoginPages.confirmRegistration) ~> render(<.div("Hello"))
       )
         .notFound(

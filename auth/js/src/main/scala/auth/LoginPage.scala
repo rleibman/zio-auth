@@ -21,7 +21,6 @@
 
 package auth
 
-import auth.given
 import japgolly.scalajs.react.component.ScalaFn.Component
 import japgolly.scalajs.react.extra.router.RouterCtl
 import japgolly.scalajs.react.vdom.html_<^.*
@@ -90,8 +89,21 @@ val LoginPage: Component[RouterCtl[LoginPages], CtorType.Props] = ScalaFnCompone
         ),
         <.div(<.button(^.`type` := "submit", "Login")),
         state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e)),
-        <.div(<.a("Forgot password?", ^.href := config.value.requestPasswordRecoveryUrl)),
-        <.div("No Account Yet?", <.a("Join the Adventure", ^.href := config.value.requestRegistrationUrl)),
+        <.div(
+          <.a(
+            "Forgot password?",
+            ^.href := config.value.requestPasswordRecoveryUrl,
+            ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.requestLostPassword) }
+          )
+        ),
+        <.div(
+          "No Account Yet?",
+          <.a(
+            "Join the Adventure",
+            ^.href := config.value.requestRegistrationUrl,
+            ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.requestRegistration) }
+          )
+        ),
         <.div("By Logging in you agree to our terms of service and privacy policy.")
       )
   )

@@ -21,8 +21,8 @@
 
 package auth
 
-import auth.given
 import japgolly.scalajs.react.component.ScalaFn.Component
+import japgolly.scalajs.react.extra.router.RouterCtl
 import japgolly.scalajs.react.vdom.html_<^.*
 import japgolly.scalajs.react.{CtorType, *}
 
@@ -31,8 +31,8 @@ case class RequestLostPasswordState(
   error: Option[String] = None
 )
 
-val RequestLostPasswordPage: Component[Unit, CtorType.Nullary] = ScalaFnComponent
-  .withHooks[Unit]
+val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = ScalaFnComponent
+  .withHooks[RouterCtl[LoginPages]]
   .useState(ClientAuthConfig())
   .useState(RequestLostPasswordState())
   .useEffectOnMountBy {
@@ -48,7 +48,7 @@ val RequestLostPasswordPage: Component[Unit, CtorType.Nullary] = ScalaFnComponen
   }
   .render(
     (
-      _,
+      ctl,
       config,
       state
     ) =>
@@ -69,31 +69,15 @@ val RequestLostPasswordPage: Component[Unit, CtorType.Nullary] = ScalaFnComponen
         <.div(
           <.button(^.`type` := "submit", "Request Password Reset"),
           state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
-        )
+        ),
+        <.div(
+          "Remembered your password ?",
+          <.a(
+            "Sign In",
+            ^.href := config.value.loginUrl,
+            ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.Login) }
+          )
+        ),
+        <.div(state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e)))
       )
   )
-//
-//          <.label("Email", ^.`for` := "email"),
-//          <.input(
-//            ^.name        := "email",
-//            ^.placeholder := "Email",
-//            ^.`type`      := "email",
-//            ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
-//          )
-//        ),
-//        <.div(
-//          <.label("Password", ^.`for` := "password"),
-//          <.input(
-//            ^.name        := "password",
-//            ^.placeholder := "Password",
-//            ^.`type`      := "password",
-//            ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
-//          )
-//        ),
-//        <.div(<.button(^.`type` := "submit", "Login")),
-//        state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e)),
-//        <.div(<.a("Forgot password?", ^.href := config.value.requestPasswordRecoveryUrl)),
-//        <.div("No Account Yet?", <.a("Join the Adventure", ^.href := config.value.requestRegistrationUrl)),
-//        <.div("By Logging in you agree to our terms of service and privacy policy.")
-//      )
-//  )

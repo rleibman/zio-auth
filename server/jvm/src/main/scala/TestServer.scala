@@ -19,10 +19,9 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+import auth.*
 import zio.*
 import zio.http.*
-import zio.json.*
-import auth.*
 
 object TestServer extends ZIOApp {
 
@@ -33,17 +32,36 @@ object TestServer extends ZIOApp {
 
   override def bootstrap: ULayer[MockAuthEnvironment] = MockAuthEnvironment.mock
 
-  private val zapp: ZIO[MockAuthEnvironment, AuthError, Routes[MockAuthEnvironment, AuthError]] = for {
+  def testAuthRoutes: ZIO[Any, AuthError, Routes[Session[MockUser], AuthError]] =
+    ZIO.succeed(
+      Routes(
+        Method.GET / "api" / "secured" -> handler((_: Request) => Response.text("Got a secured resource!"))
+      )
+    )
+
+  val zapp = for {
     authServer   <- ZIO.service[AuthServer[MockUser, MockUserId]]
     authRoutes   <- authServer.authRoutes
+    test         <- testAuthRoutes
     unauthRoutes <- authServer.unauthRoutes
-  } yield ((authRoutes @@ authServer.bearerSessionProvider) ++ unauthRoutes) @@ Middleware.debug
+  } yield ((authRoutes ++ test) @@ authServer.bearerSessionProvider ++ unauthRoutes @@ Middleware.debug)
+    .tapErrorZIO(e => ZIO.logErrorCause(Cause.fail(e)))
+    .handleErrorCause { e =>
+      e.squash.printStackTrace()
+      e.squash.match {
+        case AuthBadRequest(msg, _) => Response.error(Status.BadRequest, msg)
+        case FileNotFound(file)     => Response.notFound(file)
+        case EmailAlreadyExists(e)  => Response.error(Status.Conflict, e)
+        case NotAuthenticated       => Response.unauthorized
+        case e                      => Response.internalServerError(e.getMessage)
+      }
+    }
 
   override def run: ZIO[Environment & ZIOAppArgs, AuthError, ExitCode] =
     for {
       app <- zapp
       server <- Server
-        .serve(app.mapError(e => Response.internalServerError(e.getMessage)))
+        .serve(app)
         .provideSome[Environment](
           Server.live,
           ZLayer.succeed(Server.Config.default.binding("localhost", 8081))

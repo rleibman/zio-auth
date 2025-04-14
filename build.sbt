@@ -109,7 +109,8 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
       "com.github.japgolly.scalajs-react" %%% "core"  % scalajsReactVersion withSources (),
       "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources (),
       "com.lihaoyi" %%% "scalatags"                   % "0.13.1" withSources (),
-      "dev.zio" %%% "zio-json"                        % zioJsonVersion withSources ()
+      "dev.zio" %%% "zio-json"                        % zioJsonVersion withSources (),
+      "org.typelevel" %%% "cats-core"                 % "2.13.0" withSources ()
     ),
     Compile / npmDependencies ++= Seq(
       "@types/react"     -> reactVersion,

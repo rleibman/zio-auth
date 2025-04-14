@@ -21,27 +21,27 @@
 
 package auth
 
+import cats.data.*
+import cats.implicits.given
+import cats.syntax.all.given
 import japgolly.scalajs.react.component.ScalaFn.Component
+import japgolly.scalajs.react.extra.router.RouterCtl
 import japgolly.scalajs.react.vdom.html_<^.*
 import japgolly.scalajs.react.{CtorType, *}
 
-case class RequestRegistrationState(
-  name:           String = "",
-  email:          String = "",
-  password:       String = "",
-  repeatPassword: String = "",
-  error:          Option[String] = None
-)
-
-val RequestRegistrationPage: Component[Unit, CtorType.Nullary] = ScalaFnComponent
-  .withHooks[Unit]
+val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = ScalaFnComponent
+  .withHooks[RouterCtl[LoginPages]]
   .useState(ClientAuthConfig())
-  .useState(RequestRegistrationState())
+  .useState(UserRegistrationRequest())
+  .useState("") // Repeat password
+  .useState(None: Option[String])
   .useEffectOnMountBy {
     (
       _,
       config,
-      _ // state
+      _, // Request
+      _, // Repeat password
+      _ // error
     ) =>
       AuthClient
         .clientAuthConfig()
@@ -50,14 +50,38 @@ val RequestRegistrationPage: Component[Unit, CtorType.Nullary] = ScalaFnComponen
   }
   .render(
     (
-      _,
+      ctl,
       config,
-      state
+      state,
+      repeatPassword,
+      error
     ) =>
       <.form(
         ^.className := "login-form",
         ^.onSubmit ==> { e =>
-          e.preventDefaultCB
+          val validated: ValidatedNec[String, UserRegistrationRequest] = UserRegistrationRequest.validateRequest(
+            state.value.name,
+            state.value.email,
+            state.value.password,
+            repeatPassword.value
+          )
+
+          e.preventDefaultCB >> (validated match {
+            case Validated.Valid(a) =>
+              AuthClient
+                .requestRegistration(a).map(r =>
+                  r.fold(
+                    e => error.modState(_ => Some(s"Error requesting registration: $e")),
+                    _ =>
+                      error.modState(_ =>
+                        Some("Account created successfully, please await for an email to confirm registration")
+                      )
+                  )
+                ).completeWith(_.get)
+            case Validated.Invalid(errors) =>
+              error.modState(_ => Some(errors.toList.mkString(", ")))
+          })
+
         },
         <.div(
           <.label("Name", ^.`for` := "name"),
@@ -92,37 +116,20 @@ val RequestRegistrationPage: Component[Unit, CtorType.Nullary] = ScalaFnComponen
             ^.name        := "repeatPassword",
             ^.placeholder := "Repeat Password",
             ^.`type`      := "password",
-            ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(repeatPassword = e.target.value)) }
+            ^.onChange ==> { (e: ReactEventFromInput) => repeatPassword.modState(_ => e.target.value) }
           )
         ),
         <.div(
-          <.button(^.`type` := "submit", "Register"),
-          state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
-        )
+          <.button(^.`type` := "submit", "Register")
+        ),
+        <.div(
+          "Already have an account?",
+          <.a(
+            "Sign In",
+            ^.href := config.value.loginUrl,
+            ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.Login) }
+          )
+        ),
+        <.div(error.value.fold(EmptyVdom)(e => <.div(^.className := "error", e)))
       )
   )
-//
-//          <.label("Email", ^.`for` := "email"),
-//          <.input(
-//            ^.name        := "email",
-//            ^.placeholder := "Email",
-//            ^.`type`      := "email",
-//            ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
-//          )
-//        ),
-//        <.div(
-//          <.label("Password", ^.`for` := "password"),
-//          <.input(
-//            ^.name        := "password",
-//            ^.placeholder := "Password",
-//            ^.`type`      := "password",
-//            ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
-//          )
-//        ),
-//        <.div(<.button(^.`type` := "submit", "Login")),
-//        state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e)),
-//        <.div(<.a("Forgot password?", ^.href := config.value.requestPasswordRecoveryUrl)),
-//        <.div("No Account Yet?", <.a("Join the Adventure", ^.href := config.value.requestRegistrationUrl)),
-//        <.div("By Logging in you agree to our terms of service and privacy policy.")
-//      )
-//  )

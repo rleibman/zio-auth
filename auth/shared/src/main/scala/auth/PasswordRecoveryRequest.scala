@@ -21,19 +21,8 @@
 
 package auth
 
-object Session {
+import zio.json.*
 
-  def apply[UserType](
-    user: UserType
-  ): Session[UserType] = {
-    AuthenticatedSession(user)
-  }
+case class PasswordRecoveryRequest(email: String)
 
-}
-
-sealed abstract class Session[UserType]
-case class AuthenticatedSession[UserType](
-  user: UserType
-) extends Session[UserType]
-case class UnauthenticatedSession[UserType]() extends Session[UserType]
-
+given JsonCodec[PasswordRecoveryRequest] = JsonCodec.derived[PasswordRecoveryRequest]

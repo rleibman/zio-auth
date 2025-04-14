@@ -21,14 +21,18 @@
 
 package auth
 
-import zio.json.JsonError.Message
-
 object AuthError {
 
   import scala.language.unsafeNulls
 
-  def apply(message: String):    AuthError = new AuthError(message, null)
-  def apply(cause:   Throwable): AuthError = new AuthError(cause.getMessage, cause)
+  def apply(message: String): AuthError = new AuthError(message, null)
+  def apply(cause: Throwable): AuthError = {
+    cause match {
+      case e: AuthError => e
+      case _ => new AuthError(cause.getMessage, cause)
+    }
+  }
+
   def apply(
     message: String,
     cause:   Throwable
@@ -46,17 +50,10 @@ case class ExpiredToken(
   cause:   Throwable
 ) extends AuthError(message, cause)
 
-case class InvalidToken(
-  message: String,
-  cause:   Throwable
-) extends AuthError(message, cause)
+import scala.language.unsafeNulls
 
-case class InvalidCredentials(
-  message: String,
-  cause:   Throwable
-) extends AuthError(message, cause)
-
-case class EmailAlreadyExists(
-  message: String,
-  cause:   Throwable
-) extends AuthError(message, cause)
+case class AuthBadRequest(message: String, cause: Option[Throwable] = None) extends AuthError(message, cause.orNull)
+case class InvalidToken(message: String, cause: Option[Throwable] = None) extends AuthError(message, cause.orNull)
+case class EmailAlreadyExists(message: String) extends AuthError(message, null)
+case class FileNotFound(message: String) extends AuthError(message, null)
+case object NotAuthenticated extends AuthError("", null)

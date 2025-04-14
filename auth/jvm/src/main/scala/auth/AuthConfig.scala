@@ -49,4 +49,5 @@ case class AuthConfig(
                        refreshTTL: Duration = 30.days,
 
                        staticContentDir: String = "/home/rleibman/projects/zio-auth2/debugDist",
+                       codeExpirationHours: Duration = 2.days
                      )

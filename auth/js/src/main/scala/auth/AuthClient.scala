@@ -28,7 +28,6 @@ import sttp.client4.fetch.{FetchBackend, FetchOptions}
 import sttp.client4.ziojson.*
 import sttp.model.StatusCode
 import zio.json.*
-import zio.json.ast.Json
 
 import scala.concurrent.Future
 
@@ -134,6 +133,19 @@ object AuthClient {
       basicRequest
         .get(uri"/api/clientAuthConfig")
         .response(asJsonOrFail[ClientAuthConfig])
+        .send(backend)
+        .map(_.body)
+    )
+  }
+
+  def requestRegistration(
+    request: UserRegistrationRequest
+  ): AsyncCallback[Either[String, String]] = {
+    AsyncCallback.fromFuture(
+      basicRequest
+        .post(uri"/api/requestRegistration")
+        .body(asJson(request))
+        .response(asString)
         .send(backend)
         .map(_.body)
     )

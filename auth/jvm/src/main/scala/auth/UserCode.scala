@@ -33,31 +33,8 @@ enum UserCodePurpose(override val toString: String) {
 
 }
 
-opaque type UserCodeString = String
-
-object UserCodeString {
-
-  given CanEqual[UserCodeString, UserCodeString] = CanEqual.derived
-
-  def random: UIO[UserCodeString] = Random.nextBytes(16).map(r => new BigInteger(r.toArray).toString(32))
-
-  def apply(str: String): UserCodeString = str
-
-  extension (str: UserCodeString) {
-
-    def str: String = str
-
-  }
-
-}
-
 case class UserCode[UserPK](
-  tok:        UserCodeString,
   purpose:    UserCodePurpose,
-  expireTime: LocalDateTime,
   userPK:     UserPK
 ) {
-
-  override def toString: String = tok.str
-
 }
