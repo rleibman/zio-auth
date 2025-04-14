@@ -271,5 +271,4 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
         )
       }
     )
-
 }
