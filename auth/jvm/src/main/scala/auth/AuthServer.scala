@@ -60,16 +60,6 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
 
   private given JsonCodec[UserCode[UserPK]] = JsonCodec.derived[UserCode[UserPK]]
 
-  private def file(
-    fileName: String
-  ): IO[FileNotFound, File] = {
-    JPaths.get(fileName) match {
-      case path: java.nio.file.Path if !Files.exists(path) => ZIO.fail(FileNotFound(fileName))
-      case path: java.nio.file.Path                        => ZIO.succeed(path.toFile.nn)
-      case null => ZIO.fail(FileNotFound(fileName))
-    }
-  }
-
   extension (claim: JwtClaim) {
 
     def decodedContent[A: JsonDecoder]: ZIO[Any, AuthError, A] =
@@ -222,26 +212,20 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
           }
         } yield res).mapError(AuthError(_))
       },
-      Method.GET / config.refreshUrl -> handler((req: Request) =>
+      Method.GET / config.refreshUrl -> handler { (req: Request) =>
         // Check the refresh token from the cookie
         // If it's valid, create a new access token and refresh token, pass them back
-        ???
-      ),
-      Method.GET / Root -> handler { (_: Request) =>
-        Handler.fromFileZIO(file(s"${config.staticContentDir}/index.html")).mapError(AuthError(_))
-      }.flatten,
-      Method.GET / trailing ->
-        handler {
-          (
-            path: Path,
-            _:    Request
-          ) =>
-            file(s"${config.staticContentDir}/${path.toString}")
-              .map(f => Handler.fromFile(f).mapError(AuthError(_)))
-              .catchAll { e =>
-                ZIO.succeed(Handler.succeed(Response.notFound(e.getMessage)))
-              }
-        }.flatten
+        val refreshCookie = req.cookie(config.refreshTokenName).map(_.content)
+        for {
+          _     <- ZIO.fail(InvalidToken("Refresh cookie not found")).when(refreshCookie.isEmpty)
+          claim <- jwtDecode(refreshCookie.get)
+          u     <- claim.decodedContent[Session[UserType]]
+          responseWithTokens <- addTokens(
+            u,
+            Response.ok
+          )
+        } yield responseWithTokens
+      }
     )
 
   protected def addTokens(
@@ -334,7 +318,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
 
   def bearerSessionProvider: HandlerAspect[AuthConfig, Session[UserType]] =
     HandlerAspect.interceptIncomingHandler(Handler.fromFunctionZIO[Request] { request =>
-      val refreshUrl = URL.decode("/refresh").toOption.get
+      val refreshUrl = URL.decode("refresh").toOption.get
 
       for {
         session <- (request.header(Header.Authorization) match {

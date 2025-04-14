@@ -23,6 +23,9 @@ import auth.*
 import zio.*
 import zio.http.*
 
+import java.io.File
+import java.nio.file.{Files, Paths as JPaths}
+
 object TestServer extends ZIOApp {
 
   import MockAuthEnvironment.*
@@ -39,16 +42,52 @@ object TestServer extends ZIOApp {
       )
     )
 
+  private def file(
+    fileName: String
+  ): IO[FileNotFound, File] = {
+    JPaths.get(fileName) match {
+      case path: java.nio.file.Path if !Files.exists(path) => ZIO.fail(FileNotFound(fileName))
+      case path: java.nio.file.Path                        => ZIO.succeed(path.toFile.nn)
+      case null => ZIO.fail(FileNotFound(fileName))
+    }
+  }
+
+  val staticContentDir: String = "/home/rleibman/projects/zio-auth2/debugDist"
+
+  def testUnauthRoutes: ZIO[Any, AuthError, Routes[Any, AuthError]] =
+    ZIO.succeed(
+      Routes(
+        Method.GET / Root -> handler { (_: Request) =>
+          // This needs to move outside of the auth server
+          Handler.fromFileZIO(file(s"$staticContentDir/index.html")).mapError(AuthError(_))
+        }.flatten,
+        Method.GET / trailing ->
+          // This needs to move outside of the auth server
+          handler {
+            (
+              path: Path,
+              _:    Request
+            ) =>
+              file(s"$staticContentDir/${path.toString}")
+                .map(f => Handler.fromFile(f).mapError(AuthError(_)))
+                .catchAll { e =>
+                  ZIO.succeed(Handler.succeed(Response.notFound(e.getMessage)))
+                }
+          }.flatten
+      )
+    )
+
   val zapp = for {
-    authServer   <- ZIO.service[AuthServer[MockUser, MockUserId]]
-    authRoutes   <- authServer.authRoutes
-    test         <- testAuthRoutes
-    unauthRoutes <- authServer.unauthRoutes
-  } yield ((authRoutes ++ test) @@ authServer.bearerSessionProvider ++ unauthRoutes @@ Middleware.debug)
+    authServer       <- ZIO.service[AuthServer[MockUser, MockUserId]]
+    authRoutes       <- authServer.authRoutes
+    authTestRoutes   <- testAuthRoutes
+    unauthRoutes     <- authServer.unauthRoutes
+    unauthTestRoutes <- testUnauthRoutes
+  } yield (((authRoutes ++ authTestRoutes) @@ authServer.bearerSessionProvider ++ (unauthRoutes ++ unauthTestRoutes)) @@ Middleware.debug)
     .tapErrorZIO(e => ZIO.logErrorCause(Cause.fail(e)))
     .handleErrorCause { e =>
-      e.squash.printStackTrace()
       e.squash.match {
+        case ExpiredToken(msg, _)   => Response.error(Status.Unauthorized, msg)
         case AuthBadRequest(msg, _) => Response.error(Status.BadRequest, msg)
         case FileNotFound(file)     => Response.notFound(file)
         case EmailAlreadyExists(e)  => Response.error(Status.Conflict, e)
