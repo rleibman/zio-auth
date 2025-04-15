@@ -57,7 +57,7 @@ object LoginRouter {
           staticRoute("#confirmRegistration", LoginPages.confirmRegistration) ~> render(<.div("Hello"))
       )
         .notFound(
-          redirectToPage(LoginPages.Login)(SetRouteVia.HistoryReplace)
+          redirectToPage(LoginPages.Login)(using SetRouteVia.HistoryReplace)
         )
     }.renderWith(layout)
   }

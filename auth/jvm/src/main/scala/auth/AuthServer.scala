@@ -311,8 +311,8 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
       javaClock <- Clock.javaClock
     } yield {
       val claim = JwtClaim(toEncode.toJson)
-        .issuedNow(javaClock)
-        .expiresIn(ttl.toSeconds)(javaClock)
+        .issuedNow(using javaClock)
+        .expiresIn(ttl.toSeconds)(using javaClock)
       Jwt.encode(claim, config.secretKey.key, JwtAlgorithm.HS512)
     }
 
