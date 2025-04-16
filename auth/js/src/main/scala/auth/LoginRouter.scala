@@ -36,7 +36,9 @@ object LoginRouter {
     page:       RouterCtl[LoginPages],
     resolution: Resolution[LoginPages]
   ): VdomElement = {
-    resolution.render()
+    <.div(^.className := "auth")(
+      resolution.render()
+    )
   }
 
   private val config: RouterWithPropsConfig[LoginPages, Unit] = RouterConfigDsl[LoginPages].buildConfig { dsl =>

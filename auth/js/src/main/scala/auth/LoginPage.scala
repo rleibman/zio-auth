@@ -55,55 +55,69 @@ val LoginPage: Component[RouterCtl[LoginPages], CtorType.Props] = ScalaFnCompone
       config,
       state
     ) =>
-      <.form(
-        ^.className := "login-form",
-        ^.onSubmit ==> { e =>
-          e.preventDefaultCB >>
-            AuthClient
-              .login[Json](state.value.email, state.value.password)
-              .map {
-                case Left(e) =>
-                  state.modState(_.copy(error = Some(e)))
-                case _ => // All's good, we're going to get reloaded, so don't worry about the return value, but do reset the url
-                  ctl.set(LoginPages.Login) >> state.modState(_.copy(error = None))
-              }
-              .completeWith(_.get)
-        },
+      <.div(
+        <.h1("Sign in to your account"),
+        <.p(^.className := "instructions", "Welcome back! Please enter your details to login."),
         <.div(
-          <.label("Email", ^.`for` := "email"),
-          <.input(
-            ^.name        := "email",
-            ^.placeholder := "Email",
-            ^.`type`      := "email",
-            ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
+          ^.className := "form-container",
+          <.form(
+            ^.onSubmit ==> { e =>
+              e.preventDefaultCB >>
+                AuthClient
+                  .login[Json](state.value.email, state.value.password)
+                  .map {
+                    case Left(e) =>
+                      state.modState(_.copy(error = Some(e)))
+                    case _ => // All's good, we're going to get reloaded, so don't worry about the return value, but do reset the url
+                      ctl.set(LoginPages.Login) >> state.modState(_.copy(error = None))
+                  }
+                  .completeWith(_.get)
+            },
+            <.div(
+              <.label("Email Address", ^.`for` := "email"),
+              <.input(
+                ^.name        := "email",
+                ^.placeholder := "wizard@example.com",
+                ^.required    := true,
+                ^.`type`      := "email",
+                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
+              )
+            ),
+            <.div(
+              <.label("Password", ^.`for` := "password"),
+              <.input(
+                ^.name         := "password",
+                ^.placeholder  := "Password",
+                ^.autoComplete := "current-password",
+                ^.required     := true,
+                ^.placeholder  := "••••••••",
+                ^.`type`       := "password",
+                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
+              )
+            ),
+            <.div(
+              <.a(
+                ^.display    := "block",
+                ^.paddingTop := 20.px,
+                "Forgot password?",
+                ^.href := config.value.requestPasswordRecoveryUrl,
+                ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.requestLostPassword) }
+              )
+            ),
+            <.div(<.button(^.`type` := "submit", "Login")),
+            state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
+          ),
+          <.div(
+            ^.className := "other-instructions",
+            "Don't have an account?",
+            <.a(
+              ^.marginLeft := 5.px,
+              "Register now",
+              ^.href := config.value.requestRegistrationUrl,
+              ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.requestRegistration) }
+            ),
+            <.div("By Logging in you agree to our terms of service and privacy policy.")
           )
-        ),
-        <.div(
-          <.label("Password", ^.`for` := "password"),
-          <.input(
-            ^.name        := "password",
-            ^.placeholder := "Password",
-            ^.`type`      := "password",
-            ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
-          )
-        ),
-        <.div(<.button(^.`type` := "submit", "Login")),
-        state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e)),
-        <.div(
-          <.a(
-            "Forgot password?",
-            ^.href := config.value.requestPasswordRecoveryUrl,
-            ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.requestLostPassword) }
-          )
-        ),
-        <.div(
-          "No Account Yet?",
-          <.a(
-            "Join the Adventure",
-            ^.href := config.value.requestRegistrationUrl,
-            ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.requestRegistration) }
-          )
-        ),
-        <.div("By Logging in you agree to our terms of service and privacy policy.")
+        )
       )
   )

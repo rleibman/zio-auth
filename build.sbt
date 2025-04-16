@@ -134,7 +134,6 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
           case Some(relFile) => debugFolder / relFile.toString
         }
 
-        //        println(s"Trying to copy ${artifact.data.toPath} to ${target.toPath}")
         Files.copy(artifact.data.toPath, target.toPath, REPLACE_EXISTING)
       }
 
@@ -155,7 +154,6 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
           case Some(relFile) => distFolder / relFile.toString
         }
 
-        //        println(s"Trying to copy ${artifact.data.toPath} to ${target.toPath}")
         Files.copy(artifact.data.toPath, target.toPath, REPLACE_EXISTING)
       }
 
@@ -239,7 +237,6 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
           case Some(relFile) => debugFolder / relFile.toString
         }
 
-        //        println(s"Trying to copy ${artifact.data.toPath} to ${target.toPath}")
         Files.copy(artifact.data.toPath, target.toPath, REPLACE_EXISTING)
       }
 
@@ -260,7 +257,6 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
           case Some(relFile) => distFolder / relFile.toString
         }
 
-        //        println(s"Trying to copy ${artifact.data.toPath} to ${target.toPath}")
         Files.copy(artifact.data.toPath, target.toPath, REPLACE_EXISTING)
       }
 

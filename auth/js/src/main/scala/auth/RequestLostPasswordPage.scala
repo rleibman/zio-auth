@@ -52,32 +52,38 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
       config,
       state
     ) =>
-      <.form(
-        ^.className := "login-form",
-        ^.onSubmit ==> { e =>
-          e.preventDefaultCB
-        },
+      <.div(
+        <.h1("Reset Your Password"),
+        <.p(^.className := "instructions", "Enter your email to receive a password reset link."),
         <.div(
-          <.label("Email", ^.`for` := "email"),
-          <.input(
-            ^.name        := "email",
-            ^.placeholder := "Email",
-            ^.`type`      := "email",
-            ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
+          ^.className := "form-container",
+          <.form(
+            ^.onSubmit ==> { e =>
+              e.preventDefaultCB
+            },
+            <.div(
+              <.label("Email Address", ^.`for` := "email"),
+              <.input(
+                ^.name        := "email",
+                ^.placeholder := "wizard@example.com",
+                ^.required    := true,
+                ^.`type`      := "email",
+                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
+              )
+            ),
+            <.div(<.button(^.`type` := "submit", "Request Password Reset")),
+            state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
+          ),
+          <.div(
+            ^.className := "other-instructions",
+            "Remembered your password?",
+            <.a(
+              ^.marginLeft := 5.px,
+              "Sign In",
+              ^.href := config.value.loginUrl,
+              ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.Login) }
+            )
           )
-        ),
-        <.div(
-          <.button(^.`type` := "submit", "Request Password Reset"),
-          state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
-        ),
-        <.div(
-          "Remembered your password ?",
-          <.a(
-            "Sign In",
-            ^.href := config.value.loginUrl,
-            ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.Login) }
-          )
-        ),
-        <.div(state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e)))
+        )
       )
   )

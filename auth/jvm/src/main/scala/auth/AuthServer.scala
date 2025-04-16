@@ -106,7 +106,6 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
       config <- ZIO.service[AuthConfig]
     } yield Routes(
       Method.POST / config.requestPasswordRecoveryUrl -> handler { (req: Request) =>
-        println("Got a password recovery request")
         for {
           parsed  <- req.body.as[PasswordRecoveryRequest]
           userOpt <- userByEmail(parsed.email)
