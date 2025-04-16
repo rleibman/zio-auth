@@ -26,7 +26,7 @@ import org.scalajs.dom.{RequestCredentials, window}
 import sttp.client4.*
 import sttp.client4.fetch.{FetchBackend, FetchOptions}
 import sttp.client4.ziojson.*
-import sttp.model.StatusCode
+import sttp.model.{HeaderNames, StatusCode}
 import zio.json.*
 
 import scala.concurrent.Future
@@ -57,9 +57,9 @@ object AuthClient {
           .map(response =>
             response.body match {
               case Right(user) =>
-                response.headers.find(_.name.equalsIgnoreCase("Authorization")) match {
+                response.header(HeaderNames.Authorization) match {
                   case Some(authHeader) =>
-                    window.localStorage.setItem("jwtToken", authHeader.value.stripPrefix("Bearer "))
+                    window.localStorage.setItem("jwtToken", authHeader.stripPrefix("Bearer "))
                     window.location.reload()
                     Right(user)
                   case None =>
@@ -93,39 +93,11 @@ object AuthClient {
     }
   }
 
-  def whoami[UserType: JsonDecoder](): AsyncCallback[Option[UserType]] = {
-    for {
-      tokOpt <- asyncJwtToken
-      user <- AsyncCallback.traverse(tokOpt) { tok =>
-        AsyncCallback.fromFuture(
-          basicRequest
-            .get(uri"/api/whoami")
-            .auth
-            .bearer(tok)
-            .response(asJsonOrFail[Option[UserType]])
-            .send(backend)
-            .map(_.body)
-        )
-      }
-    } yield user.flatten.headOption
-  }
-
-  extension [A: JsonDecoder](request: Request[A]) {
-
-    def toAsyncCallback: AsyncCallback[Option[A]] = {
-      for {
-        tokOpt <- asyncJwtToken
-        res <- AsyncCallback.traverse(tokOpt) { tok =>
-          AsyncCallback.fromFuture(
-            request.auth
-              .bearer(tok)
-              .send(backend)
-              .map(_.body)
-          )
-        }
-      } yield res.headOption
-    }
-
+  def whoami[UserType: JsonDecoder]() = {
+    withAuth[UserType](
+      basicRequest.get(uri"/api/whoami"),
+      _ => AsyncCallback.unit // Do nothing with the error
+    ).map(_.toOption)
   }
 
   def clientAuthConfig(): AsyncCallback[ClientAuthConfig] = {
@@ -149,6 +121,86 @@ object AuthClient {
         .send(backend)
         .map(_.body)
     )
+  }
+
+  val apiSecuredRequest: Request[Either[String, String]] = basicRequest
+    .get(uri"/api/secured")
+    .response(asString)
+
+  /** This method is used to make an authenticated request to the server. It will first check if a JWT token is present
+    * in local storage. If it is, it will use it to make the request. If the token is not present, it will call the
+    * refresh endpoint to get a new token. If the refresh token is not present, it will call the onError function.
+    */
+  // TODO, might consider moving this to an sttp backend instead
+  def withAuth[A: JsonDecoder](
+    request: Request[Either[String, String]],
+    onAuthError: String => AsyncCallback[Any] = msg =>
+      AsyncCallback.pure {
+        window.alert(msg)
+        window.location.reload()
+      }
+  ): AsyncCallback[Either[String, A]] = {
+    def doCall(tok: String): AsyncCallback[Response[Either[String, A]]] = {
+      AsyncCallback.fromFuture(
+        request
+          .mapResponse { s =>
+            s
+          }
+          .response(asJson[A])
+          .auth
+          .bearer(tok)
+          .mapResponse { e =>
+            e.left.map(_.getMessage)
+          }
+          .send(backend)
+      )
+    }
+
+    for {
+      tokOpt      <- asyncJwtToken
+      responseOpt <- AsyncCallback.traverseOption(tokOpt)(doCall)
+      withRefresh <- responseOpt match {
+        case Some(response)
+            if response.code == StatusCode.Unauthorized && response.body.left.exists(_.contains("token_expired")) =>
+          Callback.log("Refreshing token").asAsyncCallback >>
+            // Call refresh endpoint
+            (for {
+              refreshResponse <- AsyncCallback.fromFuture(
+                basicRequest
+                  .get(uri"/refresh")
+                  .response(asString)
+                  .send(backend)
+              )
+              retried <- refreshResponse.code match {
+                case c if c.isSuccess =>
+                  refreshResponse.header(HeaderNames.Authorization) match {
+                    case Some(authHeader) =>
+                      val newToken = authHeader.stripPrefix("Bearer ")
+                      window.localStorage.setItem("jwtToken", newToken)
+                      doCall(newToken).map(_.body)
+                    case None =>
+                      val msg = "Server said refresh was ok, but didn't return a token"
+                      onAuthError(msg) >> AsyncCallback.pure(Left(msg))
+                  }
+                case c =>
+                  val msg = s"Trying to get Refresh token got $c"
+                  onAuthError(msg) >> AsyncCallback.pure(Left(msg))
+              }
+            } yield retried)
+        case None =>
+          val msg = "No token set, please log in"
+          onAuthError(msg) >> AsyncCallback.pure(Left(msg))
+        case Some(other) if !other.code.isSuccess =>
+          AsyncCallback.pure {
+            // Clear the token
+            window.localStorage.removeItem("jwtToken")
+            window.localStorage.clear()
+          } >>
+            AsyncCallback.pure(other.body) // Success, or some other "normal" error, pass it along
+        case Some(other) =>
+          AsyncCallback.pure(other.body) // Success, or some other "normal" error, pass it along
+      }
+    } yield withRefresh
   }
 
 }

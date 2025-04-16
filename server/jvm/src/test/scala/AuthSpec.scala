@@ -1,4 +1,4 @@
-import MockAuthEnvironment.{MockAuthEnvironment, MockAuthServer, MockUser, MockUserId}
+import MockAuthEnvironment.{MockAuthEnvironment, MockAuthServer}
 import auth.AuthServer.*
 import auth.{*, given}
 import zio.*
@@ -247,13 +247,13 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           token = r1.header(Header.Authorization).get.renderedValue.stripPrefix("Bearer ")
           app    <- zapp
           config <- ZIO.service[AuthConfig]
-          _      <- TestClock.adjust(config.accessTTL.plus(5.minutes)) // Simulate token expiration
+          _      <- TestClock.adjust(config.accessTTL.plus(5.seconds)) // Simulate token expiration
           r2 <- app.run(
             Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
           )
         } yield assertTrue(
           r1.status.isSuccess,
-          r2.status == Status.SeeOther // Should redirect to refresh URL
+          r2.status == Status.Unauthorized // Should redirect to refresh URL
         )
       },
       test("refresh token") {
@@ -265,23 +265,23 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r2 <- app.run(
             Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
           )
-          _ <- TestClock.adjust(config.accessTTL.plus(5.minutes)) // Simulate token expiration
+          _ <- TestClock.adjust(config.accessTTL.plus(5.seconds)) // Simulate token expiration
           r3 <- app.run(
             Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
           )
-          refreshUrl = r3.header(Header.Location).get.renderedValue
           refreshCookie = r1.header(Header.SetCookie).map(_.value.content)
           r4 <- app.run(
             Request
-              .get(refreshUrl)
+              .get(config.refreshUrl)
               .addHeader(Header.Authorization.Bearer(token))
               .addCookie(Cookie.Request(config.refreshTokenName, refreshCookie.getOrElse("")))
           )
+          token_expired <- r3.body.asString
         } yield assertTrue(
           r1.status.isSuccess,
           r2.status.isSuccess,
-          r3.status == Status.SeeOther,
-          refreshUrl == config.refreshUrl,
+          r3.status == Status.Unauthorized,
+          token_expired == "token_expired",
           r4.status.isSuccess
         )
       },
@@ -294,23 +294,23 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r2 <- app.run(
             Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
           )
-          _ <- TestClock.adjust(config.refreshTTL.plus(5.minutes)) // Simulate refresh expiration
+          _ <- TestClock.adjust(config.refreshTTL.plus(5.seconds)) // Simulate refresh expiration
           r3 <- app.run(
             Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
           )
-          refreshUrl = r3.header(Header.Location).get.renderedValue
           refreshCookie = r1.header(Header.SetCookie).map(_.value.content)
           r4 <- app.run(
             Request
-              .get(refreshUrl)
+              .get(config.refreshUrl)
               .addHeader(Header.Authorization.Bearer(token))
               .addCookie(Cookie.Request(config.refreshTokenName, refreshCookie.getOrElse("")))
           )
+          token_expired <- r3.body.asString
         } yield assertTrue(
           r1.status.isSuccess,
           r2.status.isSuccess,
-          r3.status == Status.SeeOther,
-          refreshUrl == config.refreshUrl,
+          r3.status == Status.Unauthorized,
+          token_expired == "token_expired",
           r4.status == Status.Unauthorized
         )
       },

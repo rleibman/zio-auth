@@ -19,16 +19,21 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package auth
+import zio.json.*
 
-object TokenPurpose {
+case class MockUserId(value: Long)
 
-  given CanEqual[TokenPurpose, TokenPurpose] = CanEqual.derived
+case class MockUser(
+  userId:   MockUserId,
+  name:     String,
+  email:    String,
+  password: String
+)
 
-}
-enum TokenPurpose(override val toString: String) {
+given JsonEncoder[MockUserId] = JsonEncoder.derived
 
-  case NewUser extends TokenPurpose(toString = "NewUser")
-  case LostPassword extends TokenPurpose(toString = "LostPassword")
+given JsonDecoder[MockUserId] = JsonDecoder.derived
 
-}
+given JsonEncoder[MockUser] = JsonEncoder.derived
+
+given JsonDecoder[MockUser] = JsonDecoder.derived

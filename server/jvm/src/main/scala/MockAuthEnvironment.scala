@@ -27,23 +27,6 @@ object MockAuthEnvironment {
 
   type MockAuthEnvironment = AuthEnvironment[MockUser, MockUserId]
 
-  given JsonEncoder[MockUserId] = JsonEncoder.derived
-
-  given JsonDecoder[MockUserId] = JsonDecoder.derived
-
-  given JsonEncoder[MockUser] = JsonEncoder.derived
-
-  given JsonDecoder[MockUser] = JsonDecoder.derived
-
-  case class MockUserId(value: Long)
-
-  case class MockUser(
-    userId:   MockUserId,
-    name:     String,
-    email:    String,
-    password: String
-  )
-
   case class MockAuthServer(
     users:         Ref[Map[MockUserId, MockUser]],
     emails:        Ref[Map[String, String]],

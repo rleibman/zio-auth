@@ -30,6 +30,7 @@ import java.time.LocalDateTime
 opaque type TokenString = String
 
 object TokenString {
+
   given CanEqual[TokenString, TokenString] = CanEqual.derived
 
   def random: UIO[TokenString] = Random.nextBytes(16).map(r => new BigInteger(r.toArray).toString(32))
@@ -37,8 +38,11 @@ object TokenString {
   def apply(str: String): TokenString = str
 
   extension (str: TokenString) {
+
     def str: String = str
+
   }
+
 }
 
 case class Token(

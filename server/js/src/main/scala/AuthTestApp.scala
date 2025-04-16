@@ -24,7 +24,7 @@ import japgolly.scalajs.react.component.ScalaFn.Component
 import japgolly.scalajs.react.vdom.html_<^.*
 import japgolly.scalajs.react.{CtorType, *}
 import org.scalajs.dom
-import zio.json.ast.Json
+import sttp.client4.basicRequest
 
 import scala.scalajs.js.annotation.JSExport
 
@@ -34,12 +34,12 @@ object AuthTestApp {
   def main(args: Array[String]): Unit = {
     val component: Component[Unit, CtorType.Nullary] = ScalaFnComponent
       .withHooks[Unit]
-      .useState(None: Option[Json])
+      .useState(None: Option[MockUser])
       .useEffectOnMountBy {
         (
           _,
           user
-        ) => AuthClient.whoami[Json]().map(j => user.modState(_ => j)).completeWith(_.get)
+        ) => AuthClient.whoami[MockUser]().map(j => user.modState(_ => j)).completeWith(_.get)
       }
       .render($ =>
         $.hook1.value.fold(
@@ -47,13 +47,24 @@ object AuthTestApp {
         )(user =>
           <.div(
             <.h1("Welcome"),
-            <.p(s"Hello $user"),
+            <.p(s"Hello ${user.name}"),
+            <.button(
+              ^.onClick --> {
+                import sttp.client4.*
+                AuthClient
+                  .withAuth[String](basicRequest.get(uri"/api/secured"))
+                  .map(s => Callback.alert(s.fold(error => s"Error: $error", s => s)))
+                  .completeWith(_.get)
+              },
+              "Secured content"
+            ),
             <.button(
               ^.onClick --> AuthClient
                 .logout()
                 .map(_ => $.hook1.modState(_ => None))
-                .completeWith(_ => $.hook1.modState(_ => None))
-            )("Logout")
+                .completeWith(_ => $.hook1.modState(_ => None)),
+              "Logout"
+            )
           )
         )
       )

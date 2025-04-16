@@ -22,6 +22,7 @@
 import auth.*
 import zio.*
 import zio.http.*
+import zio.json.*
 
 import java.io.File
 import java.nio.file.{Files, Paths as JPaths}
@@ -38,7 +39,7 @@ object TestServer extends ZIOApp {
   def testAuthRoutes: ZIO[Any, AuthError, Routes[Session[MockUser], AuthError]] =
     ZIO.succeed(
       Routes(
-        Method.GET / "api" / "secured" -> handler((_: Request) => Response.text("Got a secured resource!"))
+        Method.GET / "api" / "secured" -> handler((_: Request) => Response.json("Got a secured resource!".toJson))
       )
     )
 

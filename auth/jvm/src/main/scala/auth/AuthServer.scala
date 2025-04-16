@@ -217,7 +217,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
         // If it's valid, create a new access token and refresh token, pass them back
         val refreshCookie = req.cookie(config.refreshTokenName).map(_.content)
         for {
-          _     <- ZIO.fail(InvalidToken("Refresh cookie not found")).when(refreshCookie.isEmpty)
+          _     <- ZIO.fail(InvalidToken("Valid refresh cookie not found")).when(refreshCookie.isEmpty)
           claim <- jwtDecode(refreshCookie.get)
           u     <- claim.decodedContent[Session[UserType]]
           responseWithTokens <- addTokens(
@@ -244,7 +244,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
           content = refreshToken,
           maxAge = Option(config.refreshTTL.plus(1.hour)),
           domain = None,
-          path = Option(Path.decode("/api/refresh")),
+          path = Option(Path.decode("/refresh")),
           isSecure = true,
           isHttpOnly = true,
           sameSite = Some(SameSite.Strict)
@@ -318,7 +318,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
 
   def bearerSessionProvider: HandlerAspect[AuthConfig, Session[UserType]] =
     HandlerAspect.interceptIncomingHandler(Handler.fromFunctionZIO[Request] { request =>
-      val refreshUrl = URL.decode("refresh").toOption.get
+      val refreshUrl = URL.decode("/refresh").toOption.get
 
       for {
         session <- (request.header(Header.Authorization) match {
@@ -331,7 +331,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
             } yield u
           case _ => ZIO.succeed(UnauthenticatedSession())
         }).catchAll {
-          case _: ExpiredToken => ZIO.fail(Response.seeOther(refreshUrl))
+          case _: ExpiredToken => ZIO.fail(Response.unauthorized("token_expired"))
           case _: InvalidToken => ZIO.fail(Response.unauthorized)
           case e => ZIO.fail(Response.badRequest(e.getMessage))
         }

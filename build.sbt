@@ -7,7 +7,7 @@ import scala.collection.Seq
 lazy val dist = TaskKey[File]("dist")
 lazy val debugDist = TaskKey[File]("debugDist")
 
-lazy val SCALA = "3.7.0-RC2"
+lazy val SCALA = "3.7.0-RC3"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 scalaVersion                  := SCALA
 Global / scalaVersion         := SCALA

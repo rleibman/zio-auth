@@ -35,7 +35,7 @@ case class AuthConfig(
                        confirmRegistrationUrl: String = "confirmRegistration",
                        loginUrl: String = "login",
                        logoutUrl: String = "logout",
-                       refreshUrl: String = "refresh",
+                       refreshUrl: String = "/refresh",
                        whoAmIUrl: String = "api/whoami",
 
                        // Stuff used for cookie
@@ -45,8 +45,8 @@ case class AuthConfig(
 //                       sessionIsSecure: Boolean = true,
 //                       sessionIsHttpOnly: Boolean = true,
 //                       sessionSameSite: Option[SameSite] = Some(SameSite.Strict),
-                       accessTTL: Duration = 30.minutes,
-                       refreshTTL: Duration = 30.days,
+                       accessTTL: Duration = 1.minutes, //For testing
+                       refreshTTL: Duration = 5.minutes,
 
                        codeExpirationHours: Duration = 2.days
                      )
