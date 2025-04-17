@@ -21,11 +21,39 @@
 
 package auth
 
+import cats.data.*
+import cats.implicits.given
+import cats.syntax.all.given
 import zio.json.JsonCodec
+
+object PasswordRecoveryNewPasswordRequest {
+
+  def validateRequest(
+    confirmationCode: String,
+    password:         String,
+    repeatPassword:   String
+  ): ValidatedNec[String, PasswordRecoveryNewPasswordRequest] = {
+    val passwordVal =
+      if (password.length >= 8) password.validNec else "Password must be at least 8 characters long".invalidNec
+    val repeatPasswordVal =
+      if (repeatPassword == password) repeatPassword.validNec else "Passwords do not match".invalidNec
+
+    (
+      passwordVal,
+      repeatPasswordVal
+    ).mapN(
+      (
+        password,
+        _
+      ) => PasswordRecoveryNewPasswordRequest(password = password, confirmationCode = confirmationCode)
+    )
+  }
+
+}
 
 case class PasswordRecoveryNewPasswordRequest(
   confirmationCode: String,
-  password:         String
+  password:         String = ""
 )
 
 given JsonCodec[PasswordRecoveryNewPasswordRequest] = JsonCodec.derived[PasswordRecoveryNewPasswordRequest]

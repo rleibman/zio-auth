@@ -35,11 +35,13 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
   .withHooks[RouterCtl[LoginPages]]
   .useState(ClientAuthConfig())
   .useState(RequestLostPasswordState())
+  .useState(false)
   .useEffectOnMountBy {
     (
       _,
       config,
-      _ // state
+      _, // state
+      _
     ) =>
       AuthClient
         .clientAuthConfig()
@@ -50,7 +52,8 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
     (
       ctl,
       config,
-      state
+      state,
+      sent
     ) =>
       <.div(
         <.h1("Reset Your Password"),
@@ -59,20 +62,34 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
           ^.className := "form-container",
           <.form(
             ^.onSubmit ==> { e =>
-              e.preventDefaultCB
+              e.preventDefaultCB >>
+                AuthClient
+                  .requestLostPassword(PasswordRecoveryRequest(state.value.email))
+                  .completeWith { _ =>
+                    sent.modState(_ => true)
+                  }
             },
-            <.div(
-              <.label("Email Address", ^.`for` := "email"),
-              <.input(
-                ^.name        := "email",
-                ^.placeholder := "wizard@example.com",
-                ^.required    := true,
-                ^.`type`      := "email",
-                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
+            if (sent.value) {
+              VdomArray(
+                <.h2("Reset link sent"),
+                <.div(s"Please check your email ${state.value.email} for instructions to reset your password.")
               )
-            ),
-            <.div(<.button(^.`type` := "submit", "Request Password Reset")),
-            state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
+            } else {
+              VdomArray(
+                <.div(
+                  <.label("Email Address", ^.`for` := "email"),
+                  <.input(
+                    ^.name        := "email",
+                    ^.placeholder := "wizard@example.com",
+                    ^.required    := true,
+                    ^.`type`      := "email",
+                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
+                  )
+                ),
+                <.div(<.button(^.`type` := "submit", "Request Password Reset")),
+                state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
+              )
+            }
           ),
           <.div(
             ^.className := "other-instructions",

@@ -21,12 +21,25 @@
 
 package auth
 
+import cats.Eq
 import japgolly.scalajs.react.extra.router.*
 import japgolly.scalajs.react.vdom.html_<^.*
 
-enum LoginPages {
+sealed trait LoginPages
 
-  case Index, Login, requestLostPassword, confirmLostPassword, requestRegistration, confirmRegistration
+object LoginPages {
+
+  case object Index extends LoginPages
+
+  case object Login extends LoginPages
+
+  case object RequestLostPassword extends LoginPages
+
+  case class PasswordRecovery(code: String) extends LoginPages
+
+  case object RequestRegistration extends LoginPages
+
+  case object ConfirmRegistration extends LoginPages
 
 }
 
@@ -43,20 +56,28 @@ object LoginRouter {
 
   private val config: RouterWithPropsConfig[LoginPages, Unit] = RouterConfigDsl[LoginPages].buildConfig { dsl =>
     {
+      import LoginPages.*
       import dsl.*
 
       (
         trimSlashes |
           staticRoute("#index", LoginPages.Index) ~> render(<.div("Should never get here")) |
           staticRoute("#login", LoginPages.Login) ~> renderR(ctl => LoginPage(ctl)) |
-          staticRoute("#requestLostPassword", LoginPages.requestLostPassword) ~> renderR(ctl =>
+          staticRoute("#requestLostPassword", LoginPages.RequestLostPassword) ~> renderR(ctl =>
             RequestLostPasswordPage(ctl)
           ) |
-          staticRoute("#confirmLostPassword", LoginPages.confirmLostPassword) ~> render(<.div("Hello")) |
-          staticRoute("#requestRegistration", LoginPages.requestRegistration) ~> renderR(ctl =>
-            RequestRegistrationPage(ctl)
+          dynamicRouteCT(
+            ("#passwordRecovery" ~ queryToMap.pmap(map => map.get("code"))(code => Map("code" -> code)))
+              .caseClass[PasswordRecovery]
+          )
+          ~> dynRenderR(
+            (
+              p,
+              ctl
+            ) => PasswordRecoveryPage(p.code, ctl)
           ) |
-          staticRoute("#confirmRegistration", LoginPages.confirmRegistration) ~> render(<.div("Hello"))
+          staticRoute("#requestRegistration", RequestRegistration) ~> renderR(ctl => RequestRegistrationPage(ctl)) |
+          staticRoute("#confirmRegistration", ConfirmRegistration) ~> render(<.div("Hello"))
       )
         .notFound(
           redirectToPage(LoginPages.Login)(using SetRouteVia.HistoryReplace)

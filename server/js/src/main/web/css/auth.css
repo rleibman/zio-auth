@@ -1,12 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=Cinzel:wght@400;700&family=Lato:wght@300;400;700&display=swap');
 
 body {
-    --tw-bg-opacity: 1;
-    background-color: rgb(26 20 35 / var(--tw-bg-opacity, 1));
-    --tw-text-opacity: 1;
-    color: rgb(230 222 209 / var(--tw-text-opacity, 1));
+    background-color: rgb(26 20 35 / 1);
+    color: rgb(230 222 209 / 1);
     font-family: 'Lato', sans-serif;
-    background-image: url('/dark-texture.jpg');
     background-repeat: repeat;
 }
 
@@ -22,10 +19,12 @@ body {
     padding-top: 48px;
 }
 
-.auth h1, h2, h3 {
+.auth h1 {
     color: rgb(199, 167, 88);
+}
+
+.auth h1, h2, h3 {
     font-family: 'Cinzel', serif;
-    font-size: 30px;
     font-weight: 800;
     text-align: center;
     line-height: 36px;

@@ -22,31 +22,28 @@
 package auth
 
 import zio.*
-import zio.http.*
-import zio.http.Cookie.SameSite
 
 case class AuthConfig(
-                       secretKey: SecretKey,
+  secretKey: SecretKey,
 
-                       // URLs
-                       requestPasswordRecoveryUrl: String = "requestPasswordRecovery",
-                       confirmPasswordRecoveryUrl: String = "confirmPasswordRecovery",
-                       requestRegistrationUrl: String = "requestRegistration",
-                       confirmRegistrationUrl: String = "confirmRegistration",
-                       loginUrl: String = "login",
-                       logoutUrl: String = "logout",
-                       refreshUrl: String = "/refresh",
-                       whoAmIUrl: String = "api/whoami",
+  // URLs
+  requestPasswordRecoveryUrl: String = "requestPasswordRecovery",
+  passwordRecoveryUrl:        String = "passwordRecovery",
+  requestRegistrationUrl:     String = "requestRegistration",
+  confirmRegistrationUrl:     String = "confirmRegistration",
+  loginUrl:                   String = "login",
+  logoutUrl:                  String = "logout",
+  refreshUrl:                 String = "/refresh",
+  whoAmIUrl:                  String = "api/whoami",
 
-                       // Stuff used for cookie
-                       refreshTokenName: String = "X-Refresh-Token",
-//                       sessionDomain: Option[String] = None,
-//                       sessionPath: Option[Path] = None,
-//                       sessionIsSecure: Boolean = true,
-//                       sessionIsHttpOnly: Boolean = true,
-//                       sessionSameSite: Option[SameSite] = Some(SameSite.Strict),
-                       accessTTL: Duration = 1.minutes, //For testing
-                       refreshTTL: Duration = 5.minutes,
-
-                       codeExpirationHours: Duration = 2.days
-                     )
+  // Stuff used for cookie
+  refreshTokenName: String = "X-Refresh-Token",
+  //                       sessionDomain: Option[String] = None,
+  //                       sessionPath: Option[Path] = None,
+  //                       sessionIsSecure: Boolean = true,
+  //                       sessionIsHttpOnly: Boolean = true,
+  //                       sessionSameSite: Option[SameSite] = Some(SameSite.Strict),
+  accessTTL:           Duration = 1.minutes, // For testing
+  refreshTTL:          Duration = 5.minutes,
+  codeExpirationHours: Duration = 2.days
+)

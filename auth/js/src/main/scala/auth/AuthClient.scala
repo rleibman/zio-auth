@@ -93,7 +93,17 @@ object AuthClient {
     }
   }
 
-  def whoami[UserType: JsonDecoder]() = {
+  def requestLostPassword(request: PasswordRecoveryRequest): AsyncCallback[Either[String, Unit]] =
+    AsyncCallback.fromFuture(
+      basicRequest
+        .post(uri"/requestPasswordRecovery")
+        .body(asJson(request))
+        .response(asString)
+        .send(backend)
+        .map(_.body.map(_ => ()))
+    )
+
+  def whoami[UserType: JsonDecoder](): AsyncCallback[Option[UserType]] = {
     withAuth[UserType](
       basicRequest.get(uri"/api/whoami"),
       _ => AsyncCallback.unit // Do nothing with the error
@@ -123,9 +133,18 @@ object AuthClient {
     )
   }
 
-  val apiSecuredRequest: Request[Either[String, String]] = basicRequest
-    .get(uri"/api/secured")
-    .response(asString)
+  def passwordRecovery(
+    request: PasswordRecoveryNewPasswordRequest
+  ): AsyncCallback[Either[String, String]] = {
+    AsyncCallback.fromFuture(
+      basicRequest
+        .post(uri"passwordRecovery")
+        .body(asJson(request))
+        .response(asString)
+        .send(backend)
+        .map(_.body)
+    )
+  }
 
   /** This method is used to make an authenticated request to the server. It will first check if a JWT token is present
     * in local storage. If it is, it will use it to make the request. If the token is not present, it will call the
@@ -143,9 +162,6 @@ object AuthClient {
     def doCall(tok: String): AsyncCallback[Response[Either[String, A]]] = {
       AsyncCallback.fromFuture(
         request
-          .mapResponse { s =>
-            s
-          }
           .response(asJson[A])
           .auth
           .bearer(tok)

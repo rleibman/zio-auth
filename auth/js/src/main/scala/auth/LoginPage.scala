@@ -101,7 +101,7 @@ val LoginPage: Component[RouterCtl[LoginPages], CtorType.Props] = ScalaFnCompone
                 ^.paddingTop := 20.px,
                 "Forgot password?",
                 ^.href := config.value.requestPasswordRecoveryUrl,
-                ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.requestLostPassword) }
+                ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.RequestLostPassword) }
               )
             ),
             <.div(<.button(^.`type` := "submit", "Login")),
@@ -114,7 +114,7 @@ val LoginPage: Component[RouterCtl[LoginPages], CtorType.Props] = ScalaFnCompone
               ^.marginLeft := 5.px,
               "Register now",
               ^.href := config.value.requestRegistrationUrl,
-              ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.requestRegistration) }
+              ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.RequestRegistration) }
             ),
             <.div("By Logging in you agree to our terms of service and privacy policy.")
           )

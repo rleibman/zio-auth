@@ -116,7 +116,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r3.status == Status.Unauthorized // After logout, token should no longer be valid
         )
       },
-      test("requestPaswordRecovery and confirmPasswordRecoveryUrl, good user") {
+      test("requestPaswordRecovery and passwordRecovery, good user") {
         for {
           app        <- zapp
           config     <- ZIO.service[AuthConfig]
@@ -134,12 +134,12 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r4 <- doLogin("goodUser3@example.com", "newPasswordGoodUser3")
         } yield assertTrue(
           r1.status.isSuccess,
-          url.path.toString.startsWith(config.confirmPasswordRecoveryUrl),
+          url.path.toString.startsWith(config.passwordRecoveryUrl),
           r2.status.isSuccess,
           r4.status.isSuccess
         )
       },
-      test("requestPaswordRecovery and confirmPasswordRecoveryUrl, bad user") {
+      test("requestPaswordRecovery and passwordRecovery, bad user") {
         for {
           app        <- zapp
           config     <- ZIO.service[AuthConfig]

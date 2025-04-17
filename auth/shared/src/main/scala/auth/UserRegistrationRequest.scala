@@ -52,12 +52,14 @@ object UserRegistrationRequest {
     (
       userNameVal,
       emailVal,
-      passwordVal
+      passwordVal,
+      repeatPasswordVal
     ).mapN(
       (
         name,
         email,
-        password
+        password,
+        _
       ) => UserRegistrationRequest(name, email, password)
     )
   }

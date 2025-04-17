@@ -28,9 +28,6 @@ import zio.http.*
 import zio.http.Cookie.SameSite
 import zio.json.*
 
-import java.io.File
-import java.nio.file.{Files, Paths as JPaths}
-
 object AuthServer {
 
   extension (body: Body) {
@@ -115,20 +112,20 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
               s"Attempted to recover password for ${parsed.email}, but the user with that email does not exist"
             )
           ) { user =>
-            val userCode = UserCode(UserCodePurpose.NewUser, getPK(user)) // Create a code for the user to confirm registration
+            val userCode = UserCode(UserCodePurpose.LostPassword, getPK(user)) // Create a code for the user to confirm registration
             for {
               userValidationToken <- jwtEncode(userCode, config.codeExpirationHours) // Encode the user code into a jwt
-              confirmUrl = s"${config.confirmPasswordRecoveryUrl}?code=$userValidationToken"
+              confirmUrl = s"${config.passwordRecoveryUrl}?code=$userValidationToken"
               _ <- sendEmail(
                 "Password Recovery Request",
-                s"""Please change you password by clicking on this link: <a href="$confirmUrl">$confirmUrl</a>""",
+                getEmailBodyHtml(user, UserCodePurpose.LostPassword, confirmUrl),
                 user
               )
-            } yield (())
+            } yield ()
           }
-        } yield Response.ok
+        } yield Response.status(Status.NoContent) // Nothing is really required back
       },
-      Method.POST / config.confirmPasswordRecoveryUrl -> handler((req: Request) =>
+      Method.POST / config.passwordRecoveryUrl -> handler((req: Request) =>
         for {
           parsed      <- req.body.as[PasswordRecoveryNewPasswordRequest]
           claim       <- jwtDecode(parsed.confirmationCode)
@@ -162,7 +159,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
           confirmUrl = s"${config.confirmRegistrationUrl}?code=$userValidationToken"
           _ <- sendEmail(
             "User creation confirmation",
-            s"""Please confirm your registration by clicking on this link: <a href="$confirmUrl">$confirmUrl</a>""",
+            getEmailBodyHtml(user, UserCodePurpose.NewUser, confirmUrl),
             user
           )
         } yield Response.ok
@@ -250,32 +247,6 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
         )
       )
 
-  def refreshSession(
-    request:  Request,
-    response: Response
-  ): ZIO[AuthConfig, Nothing, Response] =
-    (for {
-      config <- ZIO.service[AuthConfig]
-      // Check to see if the refresh token exists AND is valid, otherwise you can't refresh
-      sessionCookieOpt = request.cookies.find(_.name == config.refreshTokenName).map(_.content)
-      session <- (for {
-        _ <- ZIO
-          .fail(InvalidToken("Token is invalid")).whenZIO(
-            sessionCookieOpt.fold(ZIO.succeed(false))(cookie => isInvalid(cookie))
-          )
-        claim      <- ZIO.foreach(sessionCookieOpt)(jwtDecode)
-        sessionOpt <- ZIO.foreach(claim)(_.decodedContent[Session[UserType]])
-        session <- sessionOpt
-          .fold(ZIO.logInfo(s"No refresh token at all") *> ZIO.fail(Response.unauthorized))(ZIO.succeed)
-      } yield session).catchAll {
-        case e: Throwable =>
-          ZIO.fail(Response.badRequest(e.getMessage))
-        case response: Response =>
-          ZIO.fail(response)
-      }
-      withTokens <- addTokens(session, response)
-    } yield withTokens).catchAll(ZIO.succeed)
-
   def login(
     userName: String,
     password: String
@@ -356,5 +327,18 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
     body:    String,
     user:    UserType
   ): IO[AuthError, Unit]
+
+  def getEmailBodyHtml(
+    user:    UserType,
+    purpose: UserCodePurpose,
+    url:     String
+  ): String = {
+    purpose match {
+      case UserCodePurpose.NewUser =>
+        s"""Please confirm your registration by clicking on this link: <a href="$url">$url</a>"""
+      case UserCodePurpose.LostPassword =>
+        s"""Please change you password by clicking on this link: <a href="$url">$url</a>"""
+    }
+  }
 
 }
