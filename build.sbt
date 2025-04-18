@@ -22,7 +22,7 @@ val zioJsonVersion = "0.7.42"
 val zioVersion = "2.1.17"
 val scalajsReactVersion = "2.1.2"
 val reactVersion = "^18.3.0"
-val sttpVersion = "4.0.2"
+val sttpVersion = "4.0.3"
 
 lazy val scala3Opts = Seq(
   "-deprecation", // Emit warning and location for usages of deprecated APIs.

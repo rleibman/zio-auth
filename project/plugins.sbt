@@ -20,5 +20,5 @@ addSbtPlugin("ch.epfl.scala" % "sbt-scalajs-bundler" % "0.21.1")
 // Testing
 
 libraryDependencies ++= Seq("org.eclipse.jgit" % "org.eclipse.jgit" % "7.2.0.202503040940-r",
-  "commons-io" % "commons-io" % "2.18.0")
+  "commons-io" % "commons-io" % "2.19.0")
 
