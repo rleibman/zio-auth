@@ -66,7 +66,8 @@ object AuthClient {
                     Left("No token received")
                 }
               case Left(err) if response.code == StatusCode.Unauthorized =>
-                Left(s"Invalid email or password: ${err.getMessage}")
+                println(err.getMessage)
+                Left(s"Invalid email or password, sorry, try again.")
               case Left(err) =>
                 Left(s"Unexpected error: ${response.code}: ${err.getMessage}")
             }
@@ -103,6 +104,17 @@ object AuthClient {
         .map(_.body.map(_ => ()))
     )
 
+  def confirmRegistration(confirmationCode: String) = {
+    AsyncCallback.fromFuture(
+      basicRequest
+        .post(uri"/confirmRegistration")
+        .body(asJson(confirmationCode))
+        .response(asString)
+        .send(backend)
+        .map(_.body.map(_ => ()))
+    )
+  }
+
   def whoami[UserType: JsonDecoder](): AsyncCallback[Option[UserType]] = {
     withAuth[UserType](
       basicRequest.get(uri"/api/whoami"),
@@ -125,7 +137,7 @@ object AuthClient {
   ): AsyncCallback[Either[String, String]] = {
     AsyncCallback.fromFuture(
       basicRequest
-        .post(uri"/api/requestRegistration")
+        .post(uri"/requestRegistration")
         .body(asJson(request))
         .response(asString)
         .send(backend)

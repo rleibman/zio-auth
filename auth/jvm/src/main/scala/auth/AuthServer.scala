@@ -87,14 +87,15 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
           body <- req.body.asString.mapError(e => AuthError(e.getMessage, e))
           newPass = body // Assuming the body contains the new password
           _ <- changePassword(getPK(user), newPass)
-        } yield Response.ok
+        } yield Response.ok // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
+
       },
       Method.GET / config.logoutUrl -> handler { (req: Request) =>
         val token = req.header(Header.Authorization).get.renderedValue.stripPrefix("Bearer ")
         for {
           _ <- invalidateToken(token)
           _ <- logout()
-        } yield Response.ok
+        } yield Response.ok // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
       }
     )
 
@@ -135,7 +136,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
             changePassword(decodedUser.userPK, parsed.password)
               .provideLayer(ZLayer.succeed(Session(user)))
           )
-        } yield Response.ok
+        } yield Response.ok // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
       ),
       Method.POST / config.requestRegistrationUrl -> handler((req: Request) =>
         for {
@@ -162,16 +163,15 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
             getEmailBodyHtml(user, UserCodePurpose.NewUser, confirmUrl),
             user
           )
-        } yield Response.ok
+        } yield Response.status(Status.NoContent) // Nothing is really required back
       ).mapError(AuthError(_)),
-      Method.GET / config.confirmRegistrationUrl -> handler { (req: Request) =>
+      Method.POST / config.confirmRegistrationUrl -> handler { (req: Request) =>
         for {
-          confirmationCode <- ZIO
-            .fromOption(req.queryParam("code")).orElseFail(AuthError("No confirmation code"))
-          claim       <- jwtDecode(confirmationCode)
-          decodedUser <- claim.decodedContent[UserCode[UserPK]]
-          _           <- activateUser(decodedUser.userPK)
-        } yield Response.ok
+          confirmationCode <- req.body.as[String]
+          claim            <- jwtDecode(confirmationCode)
+          decodedUser      <- claim.decodedContent[UserCode[UserPK]]
+          _                <- activateUser(decodedUser.userPK)
+        } yield Response.status(Status.NoContent) // Nothing is really required back
       },
       Method.GET / "api" / "clientAuthConfig" -> handler((_: Request) =>
         Response.json(
@@ -320,7 +320,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
     password: String
   ): IO[AuthError, UserType]
 
-  def activateUser(userPK: UserPK): IO[AuthError, Unit] = ZIO.unit
+  def activateUser(userPK: UserPK): IO[AuthError, Unit] = ZIO.unit // By default users don't need activation.
 
   def sendEmail(
     subject: String,
@@ -335,9 +335,9 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
   ): String = {
     purpose match {
       case UserCodePurpose.NewUser =>
-        s"""Please confirm your registration by clicking on this link: <a href="$url">$url</a>"""
+        s"""Please confirm your registration by clicking on this link:\n<a href="http://localhost:8081/#$url">http://localhost:8081/#$url</a>"""
       case UserCodePurpose.LostPassword =>
-        s"""Please change you password by clicking on this link: <a href="$url">$url</a>"""
+        s"""Please change you password by clicking on this link:\n<a href="http://localhost:8081/#$url">http://localhost:8081/#$url</a>"""
     }
   }
 

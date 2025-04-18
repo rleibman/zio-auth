@@ -71,12 +71,16 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
             },
             if (sent.value) {
               VdomArray(
-                <.h2("Reset link sent"),
-                <.div(s"Please check your email ${state.value.email} for instructions to reset your password.")
+                <.h2(^.key := "a", "Reset link sent"),
+                <.div(
+                  ^.key := "b",
+                  s"Please check your email ${state.value.email} for instructions to reset your password."
+                )
               )
             } else {
               VdomArray(
                 <.div(
+                  ^.key := "c",
                   <.label("Email Address", ^.`for` := "email"),
                   <.input(
                     ^.name        := "email",
@@ -86,8 +90,8 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                     ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
                   )
                 ),
-                <.div(<.button(^.`type` := "submit", "Request Password Reset")),
-                state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
+                <.div(^.key := "d", <.button(^.`type` := "submit", "Request Password Reset")),
+                state.value.error.fold(EmptyVdom)(e => <.div(^.key := "e", ^.className := "error", e))
               )
             }
           ),

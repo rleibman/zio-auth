@@ -21,7 +21,6 @@
 
 package auth
 
-import cats.Eq
 import japgolly.scalajs.react.extra.router.*
 import japgolly.scalajs.react.vdom.html_<^.*
 
@@ -39,7 +38,7 @@ object LoginPages {
 
   case object RequestRegistration extends LoginPages
 
-  case object ConfirmRegistration extends LoginPages
+  case class ConfirmRegistration(code: String) extends LoginPages
 
 }
 
@@ -69,15 +68,22 @@ object LoginRouter {
           dynamicRouteCT(
             ("#passwordRecovery" ~ queryToMap.pmap(map => map.get("code"))(code => Map("code" -> code)))
               .caseClass[PasswordRecovery]
-          )
-          ~> dynRenderR(
+          ) ~> dynRenderR(
             (
               p,
               ctl
             ) => PasswordRecoveryPage(p.code, ctl)
           ) |
           staticRoute("#requestRegistration", RequestRegistration) ~> renderR(ctl => RequestRegistrationPage(ctl)) |
-          staticRoute("#confirmRegistration", ConfirmRegistration) ~> render(<.div("Hello"))
+          dynamicRouteCT(
+            ("#confirmRegistration" ~ queryToMap.pmap(map => map.get("code"))(code => Map("code" -> code)))
+              .caseClass[ConfirmRegistration]
+          ) ~> dynRenderR(
+            (
+              p,
+              ctl
+            ) => ConfirmRegistrationPage(p.code, ctl)
+          )
       )
         .notFound(
           redirectToPage(LoginPages.Login)(using SetRouteVia.HistoryReplace)

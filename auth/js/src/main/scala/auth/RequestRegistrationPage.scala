@@ -34,6 +34,7 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
   .useState(ClientAuthConfig())
   .useState(UserRegistrationRequest())
   .useState("") // Repeat password
+  .useState(false)
   .useState(None: Option[String])
   .useEffectOnMountBy {
     (
@@ -41,6 +42,7 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
       config,
       _, // Request
       _, // Repeat password
+      _, // sent
       _ // error
     ) =>
       AuthClient
@@ -54,6 +56,7 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
       config,
       state,
       repeatPassword,
+      sent,
       error
     ) =>
       <.div(
@@ -63,12 +66,13 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
           ^.className := "form-container",
           <.form(
             ^.onSubmit ==> { e =>
-              val validated: ValidatedNec[String, UserRegistrationRequest] = UserRegistrationRequest.validateRequest(
-                state.value.name,
-                state.value.email,
-                state.value.password,
-                repeatPassword.value
-              )
+              val validated: ValidatedNec[String, UserRegistrationRequest] =
+                UserRegistrationRequest.validateRequest(
+                  state.value.name,
+                  state.value.email,
+                  state.value.password,
+                  repeatPassword.value
+                )
 
               e.preventDefaultCB >> (validated match {
                 case Validated.Valid(a) =>
@@ -79,7 +83,7 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                         _ =>
                           error.modState(_ =>
                             Some("Account created successfully, please await for an email to confirm registration")
-                          )
+                          ) >> sent.modState(_ => true)
                       )
                     ).completeWith(_.get)
                 case Validated.Invalid(errors) =>
@@ -87,46 +91,62 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
               })
 
             },
-            <.div(
-              <.label("Name", ^.`for` := "name"),
-              <.input(
-                ^.name        := "name",
-                ^.placeholder := "MightyDM",
-                ^.required    := true,
-                ^.`type`      := "text",
-                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(name = e.target.value)) }
+            if (sent.value) {
+              VdomArray(
+                <.h2(^.key := "a", "Account Creation Submitted"),
+                <.div(
+                  ^.key := "b",
+                  s"Please check your email ${state.value.email} for instructions to validate your account creation."
+                )
               )
-            ),
-            <.div(
-              <.label("Email", ^.`for` := "email"),
-              <.input(
-                ^.name        := "email",
-                ^.placeholder := "wizard@example.com",
-                ^.required    := true,
-                ^.`type`      := "email",
-                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
+            } else {
+              VdomArray(
+                <.div(
+                  ^.key := "c",
+                  <.label("Name", ^.`for` := "name"),
+                  <.input(
+                    ^.name        := "name",
+                    ^.placeholder := "MightyDM",
+                    ^.required    := true,
+                    ^.`type`      := "text",
+                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(name = e.target.value)) }
+                  )
+                ),
+                <.div(
+                  ^.key := "d",
+                  <.label("Email", ^.`for` := "email"),
+                  <.input(
+                    ^.name        := "email",
+                    ^.placeholder := "wizard@example.com",
+                    ^.required    := true,
+                    ^.`type`      := "email",
+                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
+                  )
+                ),
+                <.div(
+                  ^.key := "e",
+                  <.label("Password", ^.`for` := "password"),
+                  <.input(
+                    ^.name        := "password",
+                    ^.placeholder := "••••••••",
+                    ^.`type`      := "password",
+                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
+                  )
+                ),
+                <.div(
+                  ^.key := "f",
+                  <.label("Repeat Password", ^.`for` := "repeatPassword"),
+                  <.input(
+                    ^.name        := "repeatPassword",
+                    ^.placeholder := "••••••••",
+                    ^.`type`      := "password",
+                    ^.onChange ==> { (e: ReactEventFromInput) => repeatPassword.modState(_ => e.target.value) }
+                  )
+                ),
+                <.div(^.key := "g", <.button(^.`type` := "submit", "Register")),
+                <.div(^.key := "h", error.value.fold(EmptyVdom)(e => <.div(^.className := "error", e)))
               )
-            ),
-            <.div(
-              <.label("Password", ^.`for` := "password"),
-              <.input(
-                ^.name        := "password",
-                ^.placeholder := "••••••••",
-                ^.`type`      := "password",
-                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
-              )
-            ),
-            <.div(
-              <.label("Repeat Password", ^.`for` := "repeatPassword"),
-              <.input(
-                ^.name        := "repeatPassword",
-                ^.placeholder := "••••••••",
-                ^.`type`      := "password",
-                ^.onChange ==> { (e: ReactEventFromInput) => repeatPassword.modState(_ => e.target.value) }
-              )
-            ),
-            <.div(<.button(^.`type` := "submit", "Register")),
-            <.div(error.value.fold(EmptyVdom)(e => <.div(^.className := "error", e)))
+            }
           ),
           <.div(
             ^.className := "other-instructions",
