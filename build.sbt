@@ -70,7 +70,8 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
   .jvmEnablePlugins(GitVersioning)
   .jsEnablePlugins(GitVersioning)
   .jvmSettings(
-    name := "zio-auth",
+    name         := "zio-auth",
+    scalaVersion := SCALA,
     libraryDependencies ++= Seq(
       // Log
       "ch.qos.logback" % "logback-classic" % "1.5.18" withSources (),
@@ -97,6 +98,7 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
   .jsEnablePlugins(ScalaJSBundlerPlugin)
   .jsSettings(
     name              := "zio-auth",
+    scalaVersion      := SCALA,
     webpack / version := "5.96.1",
     Compile / fastOptJS / artifactPath := ((Compile / fastOptJS / crossTarget).value /
       ((fastOptJS / moduleName).value + "-opt.js")),
