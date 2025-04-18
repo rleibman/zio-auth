@@ -7,6 +7,10 @@ import scala.collection.Seq
 lazy val dist = TaskKey[File]("dist")
 lazy val debugDist = TaskKey[File]("debugDist")
 
+enablePlugins(
+  GitVersioning
+)
+
 lazy val SCALA = "3.7.0-RC3"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 scalaVersion                  := SCALA
@@ -63,6 +67,8 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
   )
   .in(file("auth"))
   .settings(commonSettings)
+  .jvmEnablePlugins(GitVersioning)
+  .jsEnablePlugins(GitVersioning)
   .jvmSettings(
     libraryDependencies ++= Seq(
       // Log
@@ -169,7 +175,10 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
   .dependsOn(auth)
   .in(file("server"))
   .settings(commonSettings)
+  .jvmEnablePlugins(GitVersioning)
+  .jsEnablePlugins(GitVersioning)
   .jvmSettings(
+    publish / skip := true,
     libraryDependencies ++= Seq(
       // Log
       "ch.qos.logback" % "logback-classic" % "1.5.18" withSources (),
@@ -195,6 +204,7 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
   )
   .jsEnablePlugins(ScalaJSBundlerPlugin)
   .jsSettings(
+    publish / skip := true,
     webpack / version := "5.96.1",
     Compile / fastOptJS / artifactPath := ((Compile / fastOptJS / crossTarget).value /
       ((fastOptJS / moduleName).value + "-opt.js")),
@@ -268,9 +278,11 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
 // Root project
 lazy val root = project
   .in(file("."))
-  .aggregate(server.js, server.jvm, auth.js)
+  .aggregate(server.js, server.jvm, auth.js, auth.jvm)
+  .enablePlugins(
+    GitVersioning
+  )
   .settings(
     name           := "zio-auth",
     publish / skip := true,
-    version        := "0.1.0"
   )
