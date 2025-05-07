@@ -11,7 +11,7 @@ enablePlugins(
   GitVersioning
 )
 
-lazy val SCALA = "3.7.0-RC3"
+lazy val SCALA = "3.7.0"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 scalaVersion                  := SCALA
 Global / scalaVersion         := SCALA

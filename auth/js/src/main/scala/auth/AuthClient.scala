@@ -88,7 +88,6 @@ object AuthClient {
     } yield {
       AsyncCallback.pure {
         window.localStorage.removeItem("jwtToken")
-        window.localStorage.clear()
         window.location.reload()
       }
     }
@@ -222,7 +221,6 @@ object AuthClient {
           AsyncCallback.pure {
             // Clear the token
             window.localStorage.removeItem("jwtToken")
-            window.localStorage.clear()
           } >>
             AsyncCallback.pure(other.body) // Success, or some other "normal" error, pass it along
         case Some(other) =>

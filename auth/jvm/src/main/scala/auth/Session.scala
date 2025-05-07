@@ -26,14 +26,18 @@ object Session {
   def apply[UserType](
     user: UserType
   ): Session[UserType] = {
-    AuthenticatedSession(user)
+    AuthenticatedSession(Some(user))
   }
 
 }
 
-sealed abstract class Session[UserType]
+sealed abstract class Session[UserType] {
+    def user: Option[UserType]
+}
 case class AuthenticatedSession[UserType](
-  user: UserType
+  user: Some[UserType]
 ) extends Session[UserType]
-case class UnauthenticatedSession[UserType]() extends Session[UserType]
+case class UnauthenticatedSession[UserType]() extends Session[UserType] {
+  override def user: None.type = None
+}
 

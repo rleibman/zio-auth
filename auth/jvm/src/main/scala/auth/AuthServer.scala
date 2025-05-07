@@ -47,6 +47,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
 
   import AuthServer.*
 
+  private given JsonCodec[Some[UserType]] = JsonCodec.derived[Some[UserType]]
   private given JsonCodec[Session[UserType]] = JsonCodec.derived[Session[UserType]]
 
   private given JsonCodec[UserCodePurpose] =
@@ -74,7 +75,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
     } yield Routes(
       Method.GET / config.whoAmIUrl -> handler { (_: Request) =>
         ZIO.serviceWith[Session[UserType]] {
-          case AuthenticatedSession(user) => json(user)
+          case AuthenticatedSession(Some(user)) => json(user)
           case _                          => Response.unauthorized("No session")
         }
       },
@@ -86,7 +87,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
           }
           body <- req.body.asString.mapError(e => AuthError(e.getMessage, e))
           newPass = body // Assuming the body contains the new password
-          _ <- changePassword(getPK(user), newPass)
+          _ <- changePassword(getPK(user.get), newPass)
         } yield Response.ok // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
 
       },
