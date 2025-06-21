@@ -11,7 +11,7 @@ enablePlugins(
   GitVersioning
 )
 
-lazy val SCALA = "3.7.0"
+lazy val SCALA = "3.7.1"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 scalaVersion                  := SCALA
 Global / scalaVersion         := SCALA
@@ -21,12 +21,12 @@ import scala.concurrent.duration.*
 Global / watchAntiEntropy := 1.second
 
 val zioConfigVersion = "4.0.4"
-val zioHttpVersion = "3.2.0" // "3.1.0" // this breaks
-val zioJsonVersion = "0.7.42"
-val zioVersion = "2.1.17"
+val zioHttpVersion = "3.3.3" // "3.1.0" // this breaks
+val zioJsonVersion = "0.7.44"
+val zioVersion = "2.1.19"
 val scalajsReactVersion = "2.1.2"
 val reactVersion = "^18.3.0"
-val sttpVersion = "4.0.3"
+val sttpVersion = "4.0.8"
 
 lazy val scala3Opts = Seq(
   "-deprecation", // Emit warning and location for usages of deprecated APIs.
@@ -85,7 +85,7 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
       "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.0" withSources (),
       "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
-      "com.github.jwt-scala"   %% "jwt-circe"             % "10.0.4" withSources (),
+      "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.0" withSources (),
       "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
       "org.scala-lang.modules" %% "scala-xml"             % "2.3.0" withSources (),
       // Other random utilities
@@ -196,7 +196,7 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
       "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.0" withSources (),
       "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
-      "com.github.jwt-scala"   %% "jwt-circe"             % "10.0.4" withSources (),
+      "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.0" withSources (),
       "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
       "org.scala-lang.modules" %% "scala-xml"             % "2.3.0" withSources (),
       // Other random utilities
