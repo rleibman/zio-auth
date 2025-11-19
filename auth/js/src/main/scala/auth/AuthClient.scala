@@ -43,15 +43,22 @@ object AuthClient {
 
   import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
 
-  def login[UserType: JsonDecoder](
-    email:    String,
-    password: String
+  def login[UserType: JsonDecoder, ConnectionId: JsonEncoder](
+    email:        String,
+    password:     String,
+    connectionId: Option[ConnectionId]
   ): AsyncCallback[Either[String, UserType]] = {
     AsyncCallback
       .fromFuture(
         basicRequest
           .post(uri"/login")
-          .body(s"""{"email":"$email","password":"$password"}""")
+          .body(
+            s"""{"email": "$email", "password": "$password", "connectionId": ${connectionId
+                .map(
+                  _.toJsonAST
+                    .fold(_ => "null", _.toJson)
+                ).getOrElse("null")}}"""
+          )
           .response(asJson[UserType])
           .send(backend)
           .map(response =>

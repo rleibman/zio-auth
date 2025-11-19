@@ -23,6 +23,7 @@ package auth
 
 import japgolly.scalajs.react.extra.router.*
 import japgolly.scalajs.react.vdom.html_<^.*
+import zio.json.JsonEncoder
 
 sealed trait LoginPages
 
@@ -44,53 +45,66 @@ object LoginPages {
 
 object LoginRouter {
 
-  private def layout(
-    page:       RouterCtl[LoginPages],
-    resolution: Resolution[LoginPages]
+  private def layout[ConnectionId: JsonEncoder](
+    page:         RouterCtl[LoginPages],
+    resolution:   ResolutionWithProps[LoginPages, Option[ConnectionId]],
+    connectionId: Option[ConnectionId]
   ): VdomElement = {
     <.div(^.className := "auth")(
-      resolution.render()
+      resolution.renderP(connectionId)
     )
   }
 
-  private val config: RouterWithPropsConfig[LoginPages, Unit] = RouterConfigDsl[LoginPages].buildConfig { dsl =>
-    {
-      import LoginPages.*
-      import dsl.*
+  private def config[ConnectionId: JsonEncoder]: RouterWithPropsConfig[LoginPages, Option[ConnectionId]] =
+    RouterWithPropsConfigDsl[LoginPages, Option[ConnectionId]].buildConfig { dsl =>
+      {
+        import LoginPages.*
+        import dsl.*
 
-      (
-        trimSlashes |
-          staticRoute("#index", LoginPages.Index) ~> render(<.div("Should never get here")) |
-          staticRoute("#login", LoginPages.Login) ~> renderR(ctl => LoginPage(ctl)) |
-          staticRoute("#requestLostPassword", LoginPages.RequestLostPassword) ~> renderR(ctl =>
-            RequestLostPasswordPage(ctl)
-          ) |
-          dynamicRouteCT(
-            ("#passwordRecovery" ~ queryToMap.pmap(map => map.get("code"))(code => Map("code" -> code)))
-              .caseClass[PasswordRecovery]
-          ) ~> dynRenderR(
-            (
-              p,
-              ctl
-            ) => PasswordRecoveryPage(p.code, ctl)
-          ) |
-          staticRoute("#requestRegistration", RequestRegistration) ~> renderR(ctl => RequestRegistrationPage(ctl)) |
-          dynamicRouteCT(
-            ("#confirmRegistration" ~ queryToMap.pmap(map => map.get("code"))(code => Map("code" -> code)))
-              .caseClass[ConfirmRegistration]
-          ) ~> dynRenderR(
-            (
-              p,
-              ctl
-            ) => ConfirmRegistrationPage(p.code, ctl)
-          )
-      )
-        .notFound(
-          redirectToPage(LoginPages.Login)(using SetRouteVia.HistoryReplace)
+        (
+          trimSlashes |
+            staticRoute("#index", LoginPages.Index) ~> render(<.div("Should never get here")) |
+            staticRoute("#login", LoginPages.Login) ~> renderRP(
+              (
+                ctl,
+                connectionId
+              ) => LoginPage(ctl, connectionId)
+            ) |
+            staticRoute("#requestLostPassword", LoginPages.RequestLostPassword) ~> renderR(ctl =>
+              RequestLostPasswordPage(ctl)
+            ) |
+            dynamicRouteCT(
+              ("#passwordRecovery" ~ queryToMap.pmap(map => map.get("code"))(code => Map("code" -> code)))
+                .caseClass[PasswordRecovery]
+            ) ~> dynRenderR(
+              (
+                p,
+                ctl
+              ) => PasswordRecoveryPage(p.code, ctl)
+            ) |
+            staticRoute("#requestRegistration", RequestRegistration) ~> renderR(ctl => RequestRegistrationPage(ctl)) |
+            dynamicRouteCT(
+              ("#confirmRegistration" ~ queryToMap.pmap(map => map.get("code"))(code => Map("code" -> code)))
+                .caseClass[ConfirmRegistration]
+            ) ~> dynRenderR(
+              (
+                p,
+                ctl
+              ) => ConfirmRegistrationPage(p.code, ctl)
+            )
         )
-    }.renderWith(layout)
-  }
+          .notFound(
+            redirectToPage(LoginPages.Login)(using SetRouteVia.HistoryReplace)
+          )
+      }.renderWithP(
+        (
+          ctl,
+          resolution
+        ) => connectionId => layout(ctl, resolution, connectionId)
+      )
+    }
 
-  def apply(): Router[LoginPages] = Router(BaseUrl.fromWindowOrigin_/, config)
+  def apply[ConnectionId: JsonEncoder](connectionId: Option[ConnectionId]) =
+    RouterWithProps(BaseUrl.fromWindowOrigin_/, config)(connectionId)
 
 }

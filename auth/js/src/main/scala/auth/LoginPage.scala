@@ -21,8 +21,10 @@
 
 package auth
 
+import japgolly.scalajs.react.CtorType.Summoner.Aux
 import japgolly.scalajs.react.component.ScalaFn.Component
 import japgolly.scalajs.react.extra.router.RouterCtl
+import japgolly.scalajs.react.internal.Box
 import japgolly.scalajs.react.vdom.html_<^.*
 import japgolly.scalajs.react.{CtorType, *}
 import zio.json.*
@@ -34,90 +36,91 @@ case class LoginPageState(
   error:    Option[String] = None
 )
 
-val LoginPage: Component[RouterCtl[LoginPages], CtorType.Props] = ScalaFnComponent
-  .withHooks[RouterCtl[LoginPages]]
-  .useState(ClientAuthConfig())
-  .useState(LoginPageState())
-  .useEffectOnMountBy {
-    (
-      _,
-      config,
-      _ // state
-    ) =>
-      AuthClient
-        .clientAuthConfig()
-        .map(c => config.modState(_ => c))
-        .completeWith(_.get)
-  }
-  .render(
-    (
-      ctl,
-      config,
-      state
-    ) =>
-      <.div(
-        <.h1("Sign in to your account"),
-        <.p(^.className := "instructions", "Welcome back! Please enter your details to login."),
+def LoginPage[ConnectionId: JsonEncoder] =
+  ScalaFnComponent
+    .withHooks[(ctl: RouterCtl[LoginPages], connectionId: Option[ConnectionId])]
+    .useState(ClientAuthConfig())
+    .useState(LoginPageState())
+    .useEffectOnMountBy {
+      (
+        _,
+        config,
+        _ // state
+      ) =>
+        AuthClient
+          .clientAuthConfig()
+          .map(c => config.modState(_ => c))
+          .completeWith(_.get)
+    }
+    .render(
+      (
+        p,
+        config,
+        state
+      ) =>
         <.div(
-          ^.className := "form-container",
-          <.form(
-            ^.onSubmit ==> { e =>
-              e.preventDefaultCB >>
-                AuthClient
-                  .login[Json](state.value.email, state.value.password)
-                  .map {
-                    case Left(e) =>
-                      state.modState(_.copy(error = Some(e)))
-                    case _ => // All's good, we're going to get reloaded, so don't worry about the return value, but do reset the url
-                      ctl.set(LoginPages.Login) >> state.modState(_.copy(error = None))
-                  }
-                  .completeWith(_.get)
-            },
-            <.div(
-              <.label("Email Address", ^.`for` := "email"),
-              <.input(
-                ^.name        := "email",
-                ^.placeholder := "wizard@example.com",
-                ^.required    := true,
-                ^.`type`      := "email",
-                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
-              )
-            ),
-            <.div(
-              <.label("Password", ^.`for` := "password"),
-              <.input(
-                ^.name         := "password",
-                ^.placeholder  := "Password",
-                ^.autoComplete := "current-password",
-                ^.required     := true,
-                ^.placeholder  := "••••••••",
-                ^.`type`       := "password",
-                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
-              )
-            ),
-            <.div(
-              <.a(
-                ^.display    := "block",
-                ^.paddingTop := 20.px,
-                "Forgot password?",
-                ^.href := config.value.requestPasswordRecoveryUrl,
-                ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.RequestLostPassword) }
-              )
-            ),
-            <.div(<.button(^.`type` := "submit", "Login")),
-            state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
-          ),
+          <.h1("Sign in to your account"),
+          <.p(^.className := "instructions", "Welcome back! Please enter your details to login."),
           <.div(
-            ^.className := "other-instructions",
-            "Don't have an account?",
-            <.a(
-              ^.marginLeft := 5.px,
-              "Register now",
-              ^.href := config.value.requestRegistrationUrl,
-              ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.RequestRegistration) }
+            ^.className := "form-container",
+            <.form(
+              ^.onSubmit ==> { e =>
+                e.preventDefaultCB >>
+                  AuthClient
+                    .login[Json, ConnectionId](state.value.email, state.value.password, p.connectionId)
+                    .map {
+                      case Left(e) =>
+                        state.modState(_.copy(error = Some(e)))
+                      case _ => // All's good, we're going to get reloaded, so don't worry about the return value, but do reset the url
+                        p.ctl.set(LoginPages.Login) >> state.modState(_.copy(error = None))
+                    }
+                    .completeWith(_.get)
+              },
+              <.div(
+                <.label("Email Address", ^.`for` := "email"),
+                <.input(
+                  ^.name        := "email",
+                  ^.placeholder := "wizard@example.com",
+                  ^.required    := true,
+                  ^.`type`      := "email",
+                  ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
+                )
+              ),
+              <.div(
+                <.label("Password", ^.`for` := "password"),
+                <.input(
+                  ^.name         := "password",
+                  ^.placeholder  := "Password",
+                  ^.autoComplete := "current-password",
+                  ^.required     := true,
+                  ^.placeholder  := "••••••••",
+                  ^.`type`       := "password",
+                  ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
+                )
+              ),
+              <.div(
+                <.a(
+                  ^.display    := "block",
+                  ^.paddingTop := 20.px,
+                  "Forgot password?",
+                  ^.href := config.value.requestPasswordRecoveryUrl,
+                  ^.onClick ==> { e => e.preventDefaultCB >> p.ctl.set(LoginPages.RequestLostPassword) }
+                )
+              ),
+              <.div(<.button(^.`type` := "submit", "Login")),
+              state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
             ),
-            <.div("By Logging in you agree to our terms of service and privacy policy.")
+            <.div(
+              ^.className := "other-instructions",
+              "Don't have an account?",
+              <.a(
+                ^.marginLeft := 5.px,
+                "Register now",
+                ^.href := config.value.requestRegistrationUrl,
+                ^.onClick ==> { e => e.preventDefaultCB >> p.ctl.set(LoginPages.RequestRegistration) }
+              ),
+              <.div("By Logging in you agree to our terms of service and privacy policy.")
+            )
           )
         )
-      )
-  )
+    )

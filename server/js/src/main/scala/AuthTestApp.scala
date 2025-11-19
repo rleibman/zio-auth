@@ -43,7 +43,7 @@ object AuthTestApp {
       }
       .render($ =>
         $.hook1.value.fold(
-          <.div(LoginRouter()())
+          <.div(LoginRouter(Some(MockConnectionId("hello"))))
         )(user =>
           <.div(
             <.h1("Welcome"),
