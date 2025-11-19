@@ -25,24 +25,25 @@ import zio.json.{JsonDecoder, JsonEncoder}
 
 object MockAuthEnvironment {
 
-  type MockAuthEnvironment = AuthEnvironment[MockUser, MockUserId]
+  type MockAuthEnvironment = AuthEnvironment[MockUser, MockUserId, MockConnectionId]
 
   case class MockAuthServer(
     users:         Ref[Map[MockUserId, MockUser]],
     emails:        Ref[Map[String, String]],
     invalidTokens: Ref[Set[String]]
-  ) extends AuthServer[MockUser, MockUserId] {
+  ) extends AuthServer[MockUser, MockUserId, MockConnectionId] {
 
     override def getPK(user: MockUser): MockUserId = user.userId
 
     override def login(
-      loginName: String,
-      password:  String
+      loginName:    String,
+      password:     String,
+      connectionId: Option[MockConnectionId]
     ): ZIO[Any, AuthError, Option[MockUser]] =
       users.get.map(_.values.find(u => u.email == loginName && u.password == password))
 
-    override def logout(): ZIO[Session[MockUser], AuthError, Unit] =
-      ZIO.serviceWithZIO[Session[MockUser]](u => ZIO.logDebug(s"User $u logged out"))
+    override def logout(): ZIO[Session[MockUser, MockConnectionId], AuthError, Unit] =
+      ZIO.serviceWithZIO[Session[MockUser, MockConnectionId]](u => ZIO.logDebug(s"User $u logged out"))
 
     override def changePassword(
       userPK:      MockUserId,
@@ -111,35 +112,42 @@ object MockAuthEnvironment {
 
   private val config = AuthConfig(secretKey = SecretKey("MOCK_SECRET_KEY"))
 
-  val mock: ULayer[AuthEnvironment[MockUser, MockUserId]] = ZLayer.make[AuthEnvironment[MockUser, MockUserId]](
-    ZLayer.succeed(config),
-    ZLayer.fromZIO(for {
-      users <- Ref
-        .make(
-          Map(
-            MockUserId(1) -> MockUser(
-              userId = MockUserId(1),
-              password = "goodUser1",
-              name = "Good User 1",
-              email = "goodUser1@example.com"
-            ),
-            MockUserId(2) -> MockUser(
-              userId = MockUserId(2),
-              password = "goodUser2",
-              name = "Good User 2",
-              email = "goodUser2@example.com"
-            ),
-            MockUserId(3) -> MockUser(
-              userId = MockUserId(3),
-              password = "goodUser3",
-              name = "Good User 3",
-              email = "goodUser3@example.com"
+  val mock: ULayer[AuthEnvironment[MockUser, MockUserId, MockConnectionId]] =
+    ZLayer.make[AuthEnvironment[MockUser, MockUserId, MockConnectionId]](
+      ZLayer.succeed(config),
+      ZLayer.fromZIO(
+        for {
+          users <- Ref
+            .make(
+              Map(
+                MockUserId(1) -> MockUser(
+                  userId = MockUserId(1),
+                  password = "goodUser1",
+                  name = "Good User 1",
+                  email = "goodUser1@example.com"
+                ),
+                MockUserId(2) -> MockUser(
+                  userId = MockUserId(2),
+                  password = "goodUser2",
+                  name = "Good User 2",
+                  email = "goodUser2@example.com"
+                ),
+                MockUserId(3) -> MockUser(
+                  userId = MockUserId(3),
+                  password = "goodUser3",
+                  name = "Good User 3",
+                  email = "goodUser3@example.com"
+                )
+              )
             )
-          )
-        )
-      confirmationEmails <- Ref.make(Map.empty[String, String])
-      invalidTokens      <- Ref.make(Set.empty[String])
-    } yield MockAuthServer(users, confirmationEmails, invalidTokens): AuthServer[MockUser, MockUserId])
-  )
+          confirmationEmails <- Ref.make(Map.empty[String, String])
+          invalidTokens      <- Ref.make(Set.empty[String])
+        } yield MockAuthServer(users, confirmationEmails, invalidTokens): AuthServer[
+          MockUser,
+          MockUserId,
+          MockConnectionId
+        ]
+      )
+    )
 
 }

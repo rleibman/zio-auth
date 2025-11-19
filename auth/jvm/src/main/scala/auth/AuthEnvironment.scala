@@ -21,4 +21,4 @@
 
 package auth
 
-type AuthEnvironment[UserType, UserPK] = AuthConfig & AuthServer[UserType, UserPK]
+type AuthEnvironment[UserType, UserPK, ConnectionId] = AuthConfig & AuthServer[UserType, UserPK, ConnectionId]

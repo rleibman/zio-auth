@@ -1,3 +1,24 @@
+/*
+ * Copyright (c) 2025 Roberto Leibman
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 import MockAuthEnvironment.{MockAuthEnvironment, MockAuthServer}
 import auth.AuthServer.*
 import auth.{*, given}
@@ -118,9 +139,10 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
       },
       test("requestPaswordRecovery and passwordRecovery, good user") {
         for {
-          app        <- zapp
-          config     <- ZIO.service[AuthConfig]
-          authServer <- ZIO.service[AuthServer[MockUser, MockUserId]].map(_.asInstanceOf[MockAuthServer])
+          app    <- zapp
+          config <- ZIO.service[AuthConfig]
+          authServer <- ZIO
+            .service[AuthServer[MockUser, MockUserId, MockConnectionId]].map(_.asInstanceOf[MockAuthServer])
           r1 <- app.run(
             Request.post(config.requestPasswordRecoveryUrl, Body.fromString("""{"email":"goodUser3@example.com"}"""))
           )
@@ -141,9 +163,10 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
       },
       test("requestPaswordRecovery and passwordRecovery, bad user") {
         for {
-          app        <- zapp
-          config     <- ZIO.service[AuthConfig]
-          authServer <- ZIO.service[AuthServer[MockUser, MockUserId]].map(_.asInstanceOf[MockAuthServer])
+          app    <- zapp
+          config <- ZIO.service[AuthConfig]
+          authServer <- ZIO
+            .service[AuthServer[MockUser, MockUserId, MockConnectionId]].map(_.asInstanceOf[MockAuthServer])
           r1 <- app.run(
             Request.post(config.requestPasswordRecoveryUrl, Body.fromString("""{"email":"badUser@example.com"}"""))
           )
@@ -156,9 +179,10 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
       test("requestRegistration and confirmRegistrationUrl: good user") {
         val requestString = UserRegistrationRequest("New User", "newUser@example.com", "newUserPassword").toJson
         for {
-          authServer <- ZIO.service[AuthServer[MockUser, MockUserId]].map(_.asInstanceOf[MockAuthServer])
-          config     <- ZIO.service[AuthConfig]
-          app        <- zapp
+          authServer <- ZIO
+            .service[AuthServer[MockUser, MockUserId, MockConnectionId]].map(_.asInstanceOf[MockAuthServer])
+          config <- ZIO.service[AuthConfig]
+          app    <- zapp
           r1 <- app.run(
             Request.post(config.requestRegistrationUrl, Body.fromString(requestString))
           )

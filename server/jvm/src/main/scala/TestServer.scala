@@ -36,7 +36,7 @@ object TestServer extends ZIOApp {
 
   override def bootstrap: ULayer[MockAuthEnvironment] = MockAuthEnvironment.mock
 
-  def testAuthRoutes: ZIO[Any, AuthError, Routes[Session[MockUser], AuthError]] =
+  def testAuthRoutes: ZIO[Any, AuthError, Routes[Session[MockUser, MockConnectionId], AuthError]] =
     ZIO.succeed(
       Routes(
         Method.GET / "api" / "secured" -> handler((_: Request) => Response.json("Got a secured resource!".toJson))
@@ -79,7 +79,7 @@ object TestServer extends ZIOApp {
     )
 
   val zapp = for {
-    authServer       <- ZIO.service[AuthServer[MockUser, MockUserId]]
+    authServer       <- ZIO.service[AuthServer[MockUser, MockUserId, MockConnectionId]]
     authRoutes       <- authServer.authRoutes
     authTestRoutes   <- testAuthRoutes
     unauthRoutes     <- authServer.unauthRoutes
@@ -97,18 +97,19 @@ object TestServer extends ZIOApp {
       }
     }
 
-  override def run: ZIO[Environment & ZIOAppArgs, AuthError, ExitCode] =
+  override def run: ZIO[Environment & ZIOAppArgs, AuthError, Unit] =
     for {
       app <- zapp
       server <- Server
         .serve(app)
-        .provideSome[Environment](
+        .provide(
           Server.live,
-          ZLayer.succeed(Server.Config.default.binding("localhost", 8081))
+          ZLayer.succeed(Server.Config.default.binding("localhost", 8081)),
+          ZLayer.succeed(AuthConfig(secretKey = SecretKey("MOCK_SECRET_KEY")))
         )
         .foldCauseZIO(
-          cause => ZIO.logErrorCause("err when booting server", cause).exitCode,
-          _ => ZIO.logError("app quit unexpectedly...").exitCode
+          cause => ZIO.logErrorCause("err when booting server", cause),
+          _ => ZIO.logError("app quit unexpectedly...")
         )
     } yield server
 

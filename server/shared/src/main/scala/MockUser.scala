@@ -30,6 +30,27 @@ case class MockUser(
   password: String
 )
 
+object MockUser {
+
+  def mock: MockUser =
+    MockUser(userId = MockUserId(1L), name = "Test User", email = "yoyo@example.com", password = "password")
+
+}
+
+opaque type MockConnectionId = String
+
+object MockConnectionId {
+
+  def apply(value: String): MockConnectionId = value
+
+}
+
+extension (id: MockConnectionId) {
+
+  def value: String = id
+
+}
+
 given JsonEncoder[MockUserId] = JsonEncoder.derived
 
 given JsonDecoder[MockUserId] = JsonDecoder.derived
@@ -37,3 +58,7 @@ given JsonDecoder[MockUserId] = JsonDecoder.derived
 given JsonEncoder[MockUser] = JsonEncoder.derived
 
 given JsonDecoder[MockUser] = JsonDecoder.derived
+
+given JsonEncoder[MockConnectionId] = JsonEncoder.string.contramap(a => a.value)
+
+given JsonDecoder[MockConnectionId] = JsonDecoder.string.map(MockConnectionId.apply)

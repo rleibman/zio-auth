@@ -52,8 +52,14 @@ case class ExpiredToken(
 
 import scala.language.unsafeNulls
 
-case class AuthBadRequest(message: String, cause: Option[Throwable] = None) extends AuthError(message, cause.orNull)
-case class InvalidToken(message: String, cause: Option[Throwable] = None) extends AuthError(message, cause.orNull)
+case class AuthBadRequest(
+  message: String,
+  cause:   Option[Throwable] = None
+) extends AuthError(message, cause.orNull)
+case class InvalidToken(
+  message: String,
+  cause:   Option[Throwable] = None
+) extends AuthError(message, cause.orNull)
 case class EmailAlreadyExists(message: String) extends AuthError(message, null)
 case class FileNotFound(message: String) extends AuthError(message, null)
 case object NotAuthenticated extends AuthError("", null)

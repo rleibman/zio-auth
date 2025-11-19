@@ -43,12 +43,16 @@ object AuthServer {
 
 }
 
-trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder, JsonDecoder, Tag}] {
+trait AuthServer[
+  UserType:     {JsonEncoder, JsonDecoder, Tag},
+  UserPK:       {JsonEncoder, JsonDecoder, Tag},
+  ConnectionId: {JsonEncoder, JsonDecoder, Tag}
+] {
 
   import AuthServer.*
 
   private given JsonCodec[Some[UserType]] = JsonCodec.derived[Some[UserType]]
-  private given JsonCodec[Session[UserType]] = JsonCodec.derived[Session[UserType]]
+  private given JsonCodec[Session[UserType, ConnectionId]] = JsonCodec.derived[Session[UserType, ConnectionId]]
 
   private given JsonCodec[UserCodePurpose] =
     JsonCodec.string.transformOrFail(
@@ -69,21 +73,21 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
 
   def getPK(user: UserType): UserPK
 
-  def authRoutes: URIO[AuthConfig, Routes[AuthConfig & Session[UserType], AuthError]] =
+  def authRoutes: URIO[AuthConfig, Routes[AuthConfig & Session[UserType, ConnectionId], AuthError]] =
     for {
       config <- ZIO.service[AuthConfig]
     } yield Routes(
       Method.GET / config.whoAmIUrl -> handler { (_: Request) =>
-        ZIO.serviceWith[Session[UserType]] {
-          case AuthenticatedSession(Some(user)) => json(user)
-          case _                          => Response.unauthorized("No session")
+        ZIO.serviceWith[Session[UserType, ConnectionId]] {
+          case AuthenticatedSession(Some(user), _) => json(user)
+          case _                                   => Response.unauthorized("No session")
         }
       },
       Method.POST / "api" / "changePassword" -> handler { (req: Request) =>
         for {
-          user <- ZIO.serviceWithZIO[Session[UserType]] {
-            case AuthenticatedSession(user) => ZIO.succeed(user)
-            case _                          => ZIO.fail(NotAuthenticated)
+          user <- ZIO.serviceWithZIO[Session[UserType, ConnectionId]] {
+            case AuthenticatedSession(user, _) => ZIO.succeed(user)
+            case _                             => ZIO.fail(NotAuthenticated)
           }
           body <- req.body.asString.mapError(e => AuthError(e.getMessage, e))
           newPass = body // Assuming the body contains the new password
@@ -135,7 +139,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
           userOpt     <- userByPK(decodedUser.userPK)
           _ <- userOpt.fold(ZIO.fail(AuthError("User Not Found")))(user =>
             changePassword(decodedUser.userPK, parsed.password)
-              .provideLayer(ZLayer.succeed(Session(user)))
+              .provideLayer(ZLayer.succeed(Session(user, None)))
           )
         } yield Response.ok // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
       ),
@@ -188,14 +192,15 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
       ),
       Method.POST / config.loginUrl -> handler { (req: Request) =>
         case class LoginRequest(
-          email:    String,
-          password: String
+          email:        String,
+          password:     String,
+          connectionId: Option[ConnectionId]
         )
         given JsonDecoder[LoginRequest] = JsonDecoder.derived
 
         (for {
           loginRequest <- req.body.as[LoginRequest]
-          login        <- login(loginRequest.email, loginRequest.password)
+          login        <- login(loginRequest.email, loginRequest.password, loginRequest.connectionId)
           _ <- login.fold(ZIO.logDebug(s"Bad login for ${loginRequest.email}"))(_ =>
             ZIO.logDebug(s"Good Login for ${loginRequest.email}")
           )
@@ -203,7 +208,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
             Response.unauthorized("Could not log on, sorry")
           }) { user =>
             addTokens(
-              Session(user),
+              Session(user, loginRequest.connectionId),
               Response.json(user.toJson)
             )
           }
@@ -216,7 +221,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
         for {
           _     <- ZIO.fail(InvalidToken("Valid refresh cookie not found")).when(refreshCookie.isEmpty)
           claim <- jwtDecode(refreshCookie.get)
-          u     <- claim.decodedContent[Session[UserType]]
+          u     <- claim.decodedContent[Session[UserType, ConnectionId]]
           responseWithTokens <- addTokens(
             u,
             Response.ok
@@ -226,7 +231,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
     )
 
   protected def addTokens(
-    session:  Session[UserType],
+    session:  Session[UserType, ConnectionId],
     response: Response
   ): URIO[AuthConfig, Response] =
     for {
@@ -249,16 +254,17 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
       )
 
   def login(
-    userName: String,
-    password: String
+    userName:     String,
+    password:     String,
+    connectionId: Option[ConnectionId]
   ): IO[AuthError, Option[UserType]]
 
-  def logout(): ZIO[Session[UserType], AuthError, Unit]
+  def logout(): ZIO[Session[UserType, ConnectionId], AuthError, Unit]
 
   def changePassword(
     userPK:      UserPK,
     newPassword: String
-  ): ZIO[Session[UserType], AuthError, Unit]
+  ): ZIO[Session[UserType, ConnectionId], AuthError, Unit]
 
   def userByEmail(email: String): IO[AuthError, Option[UserType]]
   def userByPK(pk:       UserPK): IO[AuthError, Option[UserType]]
@@ -287,7 +293,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
       Jwt.encode(claim, config.secretKey.key, JwtAlgorithm.HS512)
     }
 
-  def bearerSessionProvider: HandlerAspect[AuthConfig, Session[UserType]] =
+  def bearerSessionProvider: HandlerAspect[AuthConfig, Session[UserType, ConnectionId]] =
     HandlerAspect.interceptIncomingHandler(Handler.fromFunctionZIO[Request] { request =>
       val refreshUrl = URL.decode("/refresh").toOption.get
 
@@ -298,7 +304,7 @@ trait AuthServer[UserType: {JsonEncoder, JsonDecoder, Tag}, UserPK: {JsonEncoder
             for {
               _     <- ZIO.fail(InvalidToken("Token is invalid")).whenZIO(isInvalid(token.value.asString))
               claim <- jwtDecode(token.value.asString)
-              u     <- claim.decodedContent[Session[UserType]]
+              u     <- claim.decodedContent[Session[UserType, ConnectionId]]
             } yield u
           case _ => ZIO.succeed(UnauthenticatedSession())
         }).catchAll {

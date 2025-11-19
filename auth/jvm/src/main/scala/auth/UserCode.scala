@@ -34,7 +34,6 @@ enum UserCodePurpose(override val toString: String) {
 }
 
 case class UserCode[UserPK](
-  purpose:    UserCodePurpose,
-  userPK:     UserPK
-) {
-}
+  purpose: UserCodePurpose,
+  userPK:  UserPK
+) {}

@@ -23,21 +23,28 @@ package auth
 
 object Session {
 
-  def apply[UserType](
-    user: UserType
-  ): Session[UserType] = {
-    AuthenticatedSession(Some(user))
+  def apply[UserType, ConnectionId](
+    user:         UserType,
+    connectionId: Option[ConnectionId]
+  ): Session[UserType, ConnectionId] = {
+    AuthenticatedSession(Some(user), connectionId)
   }
 
 }
 
-sealed abstract class Session[UserType] {
-    def user: Option[UserType]
-}
-case class AuthenticatedSession[UserType](
-  user: Some[UserType]
-) extends Session[UserType]
-case class UnauthenticatedSession[UserType]() extends Session[UserType] {
-  override def user: None.type = None
-}
+sealed abstract class Session[UserType, ConnectionId] {
 
+  def user:         Option[UserType]
+  def connectionId: Option[ConnectionId]
+
+}
+case class AuthenticatedSession[UserType, ConnectionId](
+  user:         Some[UserType],
+  connectionId: Option[ConnectionId] = None
+) extends Session[UserType, ConnectionId]
+case class UnauthenticatedSession[UserType, ConnectionId](connectionId: Option[ConnectionId] = None)
+    extends Session[UserType, ConnectionId] {
+
+  override def user: None.type = None
+
+}

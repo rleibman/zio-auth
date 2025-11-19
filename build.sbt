@@ -11,7 +11,7 @@ enablePlugins(
   GitVersioning
 )
 
-lazy val SCALA = "3.7.1"
+lazy val SCALA = "3.7.4"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 scalaVersion                  := SCALA
 Global / scalaVersion         := SCALA
@@ -20,13 +20,13 @@ import scala.concurrent.duration.*
 
 Global / watchAntiEntropy := 1.second
 
-val zioConfigVersion = "4.0.4"
-val zioHttpVersion = "3.3.3" // "3.1.0" // this breaks
-val zioJsonVersion = "0.7.44"
-val zioVersion = "2.1.19"
-val scalajsReactVersion = "2.1.2"
+val zioConfigVersion = "4.0.5"
+val zioHttpVersion = "3.5.1"
+val zioJsonVersion = "0.7.45"
+val zioVersion = "2.1.22"
+val scalajsReactVersion = "2.1.3"
 val reactVersion = "^18.3.0"
-val sttpVersion = "4.0.8"
+val sttpVersion = "4.0.13"
 
 lazy val scala3Opts = Seq(
   "-deprecation", // Emit warning and location for usages of deprecated APIs.
@@ -74,18 +74,18 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
     scalaVersion := SCALA,
     libraryDependencies ++= Seq(
       // Log
-      "ch.qos.logback" % "logback-classic" % "1.5.18" withSources (),
+      "ch.qos.logback" % "logback-classic" % "1.5.21" withSources (),
       // ZIO
       "dev.zio"                %% "zio"                   % zioVersion withSources (),
       "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
-      "dev.zio"                %% "zio-cache"             % "0.2.4" withSources (),
+      "dev.zio"                %% "zio-cache"             % "0.2.5" withSources (),
       "dev.zio"                %% "zio-config"            % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-derivation" % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-magnolia"   % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
-      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.0" withSources (),
+      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.1" withSources (),
       "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
-      "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.0" withSources (),
+      "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.3" withSources (),
       "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
       "org.scala-lang.modules" %% "scala-xml"             % "2.3.0" withSources (),
       // Other random utilities
@@ -115,7 +115,7 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client4" %%% "core"      % sttpVersion withSources (),
       "com.softwaremill.sttp.client4" %%% "zio-json"  % sttpVersion withSources (),
-      "org.scala-js" %%% "scalajs-dom"                % "2.8.0" withSources (),
+      "org.scala-js" %%% "scalajs-dom"                % "2.8.1" withSources (),
       "com.github.japgolly.scalajs-react" %%% "core"  % scalajsReactVersion withSources (),
       "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources (),
       "com.lihaoyi" %%% "scalatags"                   % "0.13.1" withSources (),
@@ -185,18 +185,18 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
     publish / skip := true,
     libraryDependencies ++= Seq(
       // Log
-      "ch.qos.logback" % "logback-classic" % "1.5.18" withSources (),
+      "ch.qos.logback" % "logback-classic" % "1.5.21" withSources (),
       // ZIO
       "dev.zio"                %% "zio"                   % zioVersion withSources (),
       "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
-      "dev.zio"                %% "zio-cache"             % "0.2.4" withSources (),
+      "dev.zio"                %% "zio-cache"             % "0.2.5" withSources (),
       "dev.zio"                %% "zio-config"            % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-derivation" % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-magnolia"   % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
-      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.0" withSources (),
+      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.1" withSources (),
       "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
-      "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.0" withSources (),
+      "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.3" withSources (),
       "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
       "org.scala-lang.modules" %% "scala-xml"             % "2.3.0" withSources (),
       // Other random utilities
@@ -223,7 +223,7 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
     Global / scalaJSStage                     := FastOptStage,
     Compile / scalaJSUseMainModuleInitializer := true,
     libraryDependencies ++= Seq(
-      "org.scala-js" %%% "scalajs-dom"                % "2.8.0" withSources (),
+      "org.scala-js" %%% "scalajs-dom"                % "2.8.1" withSources (),
       "com.github.japgolly.scalajs-react" %%% "core"  % scalajsReactVersion withSources (),
       "com.github.japgolly.scalajs-react" %%% "extra" % scalajsReactVersion withSources (),
       "com.lihaoyi" %%% "scalatags"                   % "0.13.1" withSources (),
