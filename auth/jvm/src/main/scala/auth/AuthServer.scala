@@ -297,6 +297,14 @@ trait AuthServer[
     HandlerAspect.interceptIncomingHandler(Handler.fromFunctionZIO[Request] { request =>
       val refreshUrl = URL.decode("/refresh").toOption.get
 
+      val connectionId: Option[ConnectionId] =
+        request.headers
+          .find(_.headerName == "X-Connection-Id")
+          .flatMap { header =>
+            (new String(java.util.Base64.getDecoder.decode(header.renderedValue.getBytes)))
+              .fromJson[ConnectionId].toOption
+          }
+
       for {
         session <- (request.header(Header.Authorization) match {
           // We got a bearer token, let's decode it
@@ -305,8 +313,14 @@ trait AuthServer[
               _     <- ZIO.fail(InvalidToken("Token is invalid")).whenZIO(isInvalid(token.value.asString))
               claim <- jwtDecode(token.value.asString)
               u     <- claim.decodedContent[Session[UserType, ConnectionId]]
-            } yield u
-          case _ => ZIO.succeed(UnauthenticatedSession())
+            } yield (u match {
+              case authenticated: AuthenticatedSession[UserType, ConnectionId] =>
+                authenticated.copy(connectionId = connectionId)
+              case unauthenticated: UnauthenticatedSession[UserType, ConnectionId] =>
+                unauthenticated.copy(connectionId = connectionId)
+            }).asInstanceOf[Session[UserType, ConnectionId]]
+
+          case _ => ZIO.succeed(UnauthenticatedSession(connectionId = connectionId))
         }).catchAll {
           case _: ExpiredToken => ZIO.fail(Response.unauthorized("token_expired"))
           case _: InvalidToken => ZIO.fail(Response.unauthorized)

@@ -31,6 +31,18 @@ import zio.json.*
 
 import scala.concurrent.Future
 
+extension (request: Request[Either[String, String]]) {
+
+  private def encodeConnectionId[ConnectionId: JsonEncoder](connectionId: ConnectionId): String = {
+    java.util.Base64.getEncoder.encodeToString(connectionId.toJson.getBytes)
+  }
+
+  def connectionId[ConnectionId: JsonEncoder](connectionId: Option[ConnectionId]): Request[Either[String, String]] = {
+    connectionId.fold(request)(c => request.header("X-Connection-Id", encodeConnectionId(c)))
+  }
+
+}
+
 object AuthClient {
 
   private def asyncJwtToken: AsyncCallback[Option[String]] =
@@ -110,7 +122,7 @@ object AuthClient {
         .map(_.body.map(_ => ()))
     )
 
-  def confirmRegistration(confirmationCode: String) = {
+  def confirmRegistration(confirmationCode: String): AsyncCallback[Either[String, Unit]] = {
     AsyncCallback.fromFuture(
       basicRequest
         .post(uri"/confirmRegistration")
@@ -121,9 +133,13 @@ object AuthClient {
     )
   }
 
-  def whoami[UserType: JsonDecoder](): AsyncCallback[Option[UserType]] = {
+
+  def whoami[UserType: JsonDecoder, ConnectionId: JsonEncoder](connectionId: Option[ConnectionId])
+    : AsyncCallback[Option[UserType]] = {
     withAuth[UserType](
-      basicRequest.get(uri"/api/whoami"),
+      basicRequest
+        .get(uri"/api/whoami")
+        .connectionId(connectionId),
       _ => AsyncCallback.unit // Do nothing with the error
     ).map(_.toOption)
   }

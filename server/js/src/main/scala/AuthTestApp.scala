@@ -39,7 +39,11 @@ object AuthTestApp {
         (
           _,
           user
-        ) => AuthClient.whoami[MockUser]().map(j => user.modState(_ => j)).completeWith(_.get)
+        ) =>
+          AuthClient
+            .whoami[MockUser, MockConnectionId](Some(MockConnectionId("hello"))).map(j =>
+              user.modState(_ => j)
+            ).completeWith(_.get)
       }
       .render($ =>
         $.hook1.value.fold(
