@@ -299,7 +299,7 @@ trait AuthServer[
 
       val connectionId: Option[ConnectionId] =
         request.headers
-          .find(_.headerName == "X-Connection-Id")
+          .find(_.headerName.equalsIgnoreCase("X-Connection-Id"))
           .flatMap { header =>
             (new String(java.util.Base64.getDecoder.decode(header.renderedValue.getBytes)))
               .fromJson[ConnectionId].toOption
