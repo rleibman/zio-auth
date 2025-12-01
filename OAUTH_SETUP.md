@@ -487,8 +487,8 @@ See `zio-auth/CLAUDE.md` for detailed instructions on adding new OAuth providers
 
 ## Resources
 
-- **zio-auth documentation**: `/home/rleibman/projects/zio-auth/CLAUDE.md`
-- **DMScreen CLAUDE.md**: `/home/rleibman/projects/dmscreen/CLAUDE.md`
+- **zio-auth documentation**: See `CLAUDE.md` in the zio-auth project
+- **DMScreen CLAUDE.md**: See `CLAUDE.md` in the project root
 - **Google OAuth 2.0 docs**: https://developers.google.com/identity/protocols/oauth2
 - **OAuth 2.0 specification**: https://oauth.net/2/
 - **ngrok documentation**: https://ngrok.com/docs
