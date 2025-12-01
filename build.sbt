@@ -20,10 +20,10 @@ import scala.concurrent.duration.*
 
 Global / watchAntiEntropy := 1.second
 
-val zioConfigVersion = "4.0.5"
-val zioHttpVersion = "3.5.1"
+val zioConfigVersion = "4.0.6"
+val zioHttpVersion = "3.7.0"
 val zioJsonVersion = "0.7.45"
-val zioVersion = "2.1.22"
+val zioVersion = "2.1.23"
 val scalajsReactVersion = "2.1.3"
 val reactVersion = "^18.3.0"
 val sttpVersion = "4.0.13"
@@ -76,20 +76,24 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
       // Log
       "ch.qos.logback" % "logback-classic" % "1.5.21" withSources (),
       // ZIO
-      "dev.zio"                %% "zio"                   % zioVersion withSources (),
-      "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
-      "dev.zio"                %% "zio-cache"             % "0.2.5" withSources (),
-      "dev.zio"                %% "zio-config"            % zioConfigVersion withSources (),
-      "dev.zio"                %% "zio-config-derivation" % zioConfigVersion withSources (),
-      "dev.zio"                %% "zio-config-magnolia"   % zioConfigVersion withSources (),
-      "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
-      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.1" withSources (),
-      "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
-      "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.3" withSources (),
-      "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
-      "org.scala-lang.modules" %% "scala-xml"             % "2.3.0" withSources (),
+      "dev.zio"                       %% "zio"                   % zioVersion withSources (),
+      "dev.zio"                       %% "zio-nio"               % "2.0.2" withSources (),
+      "dev.zio"                       %% "zio-cache"             % "0.2.7" withSources (),
+      "dev.zio"                       %% "zio-config"            % zioConfigVersion withSources (),
+      "dev.zio"                       %% "zio-config-derivation" % zioConfigVersion withSources (),
+      "dev.zio"                       %% "zio-config-magnolia"   % zioConfigVersion withSources (),
+      "dev.zio"                       %% "zio-config-typesafe"   % zioConfigVersion withSources (),
+      "dev.zio"                       %% "zio-logging-slf4j2"    % "2.5.2" withSources (),
+      "dev.zio"                       %% "zio-http"              % zioHttpVersion withSources (),
+      "com.github.jwt-scala"          %% "jwt-circe"             % "11.0.3" withSources (),
+      "dev.zio"                       %% "zio-json"              % zioJsonVersion withSources (),
+      "org.scala-lang.modules"        %% "scala-xml"             % "2.3.0" withSources (),
+      // HTTP client for OAuth providers
+      "com.softwaremill.sttp.client4" %% "core"                  % sttpVersion withSources (),
+      "com.softwaremill.sttp.client4" %% "zio"                   % sttpVersion withSources (),
+      "com.softwaremill.sttp.client4" %% "zio-json"              % sttpVersion withSources (),
       // Other random utilities
-      "com.github.daddykotex" %% "courier" % "4.0.0-RC1" withSources (),
+      "com.github.daddykotex"         %% "courier"               % "4.0.0-RC1" withSources (),
       // Testing
       "dev.zio" %% "zio-test"     % zioVersion % "test" withSources (),
       "dev.zio" %% "zio-test-sbt" % zioVersion % "test" withSources ()
@@ -189,12 +193,12 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
       // ZIO
       "dev.zio"                %% "zio"                   % zioVersion withSources (),
       "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
-      "dev.zio"                %% "zio-cache"             % "0.2.5" withSources (),
+      "dev.zio"                %% "zio-cache"             % "0.2.7" withSources (),
       "dev.zio"                %% "zio-config"            % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-derivation" % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-magnolia"   % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
-      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.1" withSources (),
+      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.2" withSources (),
       "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
       "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.3" withSources (),
       "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),

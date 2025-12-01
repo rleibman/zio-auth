@@ -55,7 +55,9 @@ object LoginRouter {
     )
   }
 
-  private def config[ConnectionId: JsonEncoder]: RouterWithPropsConfig[LoginPages, Option[ConnectionId]] =
+  private def config[ConnectionId: JsonEncoder](
+    oauthProviders: List[OAuthProviderUI]
+  ): RouterWithPropsConfig[LoginPages, Option[ConnectionId]] =
     RouterWithPropsConfigDsl[LoginPages, Option[ConnectionId]].buildConfig { dsl =>
       {
         import LoginPages.*
@@ -68,7 +70,7 @@ object LoginRouter {
               (
                 ctl,
                 connectionId
-              ) => LoginPage(ctl, connectionId)
+              ) => LoginPage(oauthProviders)(ctl, connectionId)
             ) |
             staticRoute("#requestLostPassword", LoginPages.RequestLostPassword) ~> renderR(ctl =>
               RequestLostPasswordPage(ctl)
@@ -104,7 +106,9 @@ object LoginRouter {
       )
     }
 
-  def apply[ConnectionId: JsonEncoder](connectionId: Option[ConnectionId]) =
-    RouterWithProps(BaseUrl.fromWindowOrigin_/, config)(connectionId)
+  def apply[ConnectionId: JsonEncoder](
+    connectionId:   Option[ConnectionId],
+    oauthProviders: List[OAuthProviderUI] = List.empty
+  ) = RouterWithProps(BaseUrl.fromWindowOrigin_/, config(oauthProviders))(connectionId)
 
 }

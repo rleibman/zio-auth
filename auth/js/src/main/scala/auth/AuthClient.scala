@@ -133,7 +133,6 @@ object AuthClient {
     )
   }
 
-
   def whoami[UserType: JsonDecoder, ConnectionId: JsonEncoder](connectionId: Option[ConnectionId])
     : AsyncCallback[Option[UserType]] = {
     withAuth[UserType](

@@ -21,11 +21,9 @@
 
 package auth
 
-import japgolly.scalajs.react.CtorType.Summoner.Aux
-import japgolly.scalajs.react.component.ScalaFn.Component
 import japgolly.scalajs.react.extra.router.RouterCtl
-import japgolly.scalajs.react.internal.Box
 import japgolly.scalajs.react.vdom.html_<^.*
+import japgolly.scalajs.react.vdom.VdomNode
 import japgolly.scalajs.react.{CtorType, *}
 import zio.json.*
 import zio.json.ast.Json
@@ -36,7 +34,9 @@ case class LoginPageState(
   error:    Option[String] = None
 )
 
-def LoginPage[ConnectionId: JsonEncoder] =
+def LoginPage[ConnectionId: JsonEncoder](
+  oauthProviders: List[OAuthProviderUI] = List.empty
+) =
   ScalaFnComponent
     .withHooks[(ctl: RouterCtl[LoginPages], connectionId: Option[ConnectionId])]
     .useState(ClientAuthConfig())
@@ -110,6 +110,27 @@ def LoginPage[ConnectionId: JsonEncoder] =
               <.div(<.button(^.`type` := "submit", "Login")),
               state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
             ),
+            // OAuth section (only rendered if providers configured)
+            if (oauthProviders.nonEmpty) {
+              <.div(
+                ^.className := "auth-oauth-section",
+                <.div(
+                  ^.className := "auth-oauth-divider",
+                  <.span("OR")
+                ),
+                VdomArray(
+                  oauthProviders.map { provider =>
+                    OAuthButton(
+                      provider = provider.provider,
+                      icon = provider.icon,
+                      label = provider.label,
+                      className = provider.className
+                    )
+                  }*
+                )
+              )
+            } else EmptyVdom,
+            // Footer
             <.div(
               ^.className := "other-instructions",
               "Don't have an account?",

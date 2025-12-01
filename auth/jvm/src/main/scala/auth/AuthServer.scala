@@ -21,12 +21,16 @@
 
 package auth
 
+import auth.oauth.{OAuthService, OAuthUserInfo}
 import pdi.jwt.*
 import pdi.jwt.exceptions.JwtExpirationException
 import zio.*
 import zio.http.*
 import zio.http.Cookie.SameSite
 import zio.json.*
+import zio.json.ast.Json
+
+import java.time.LocalDateTime
 
 object AuthServer {
 
@@ -104,9 +108,10 @@ trait AuthServer[
       }
     )
 
-  def unauthRoutes: URIO[AuthConfig, Routes[AuthConfig, AuthError]] =
+  def unauthRoutes: URIO[AuthConfig & OAuthService, Routes[AuthConfig, AuthError]] =
     for {
-      config <- ZIO.service[AuthConfig]
+      config      <- ZIO.service[AuthConfig]
+      oauthRoutes <- oauthUnauthRoutes
     } yield Routes(
       Method.POST / config.requestPasswordRecoveryUrl -> handler { (req: Request) =>
         for {
@@ -228,7 +233,117 @@ trait AuthServer[
           )
         } yield responseWithTokens
       }
-    )
+    ) ++ oauthRoutes
+
+  /** OAuth routes for login and callback
+    *
+    * These routes are only active if OAuthService is provided in the environment. If OAuthService is not available,
+    * returns empty routes (OAuth disabled).
+    *
+    * Routes:
+    *   - GET /oauth/:provider/login - Initiates OAuth flow, redirects to provider
+    *   - GET /oauth/:provider/callback - Handles OAuth callback, creates/links user, returns JWT
+    *
+    * Note: This method requires OAuthService in the environment. If not provided, it will fail at runtime. Use
+    * ZLayer.succeed(OAuthService.live(None)) to disable OAuth.
+    */
+  private def oauthUnauthRoutes: URIO[AuthConfig & OAuthService, Routes[AuthConfig, AuthError]] =
+    ZIO.serviceWithZIO[OAuthService] { oauthService =>
+      // State store for CSRF protection (state -> (timestamp, provider))
+      val stateStore = scala.collection.concurrent.TrieMap.empty[String, (LocalDateTime, String)]
+
+      // Cleanup expired states periodically (every 5 minutes)
+      val cleanupSchedule = Schedule.fixed(5.minutes)
+      val cleanupFiber = ZIO
+        .succeed {
+          val now = LocalDateTime.now()
+          stateStore.filterInPlace { case (_, (timestamp, _)) =>
+            timestamp.plusMinutes(10).isAfter(now)
+          }
+        }
+        .repeat(cleanupSchedule)
+        .forkDaemon
+
+      cleanupFiber *> ZIO.succeed(
+        Routes(
+          // OAuth login initiation
+          Method.GET / "oauth" / string("provider") / "login" -> handler {
+            (
+              provider: String,
+              _:        Request
+            ) =>
+              (for {
+                oauthProvider <- oauthService.getProvider(provider)
+                state         <- oauthService.generateState()
+                _             <- ZIO.succeed(stateStore.put(state, (LocalDateTime.now(), provider)))
+                authUrl       <- oauthProvider.generateAuthUrl(state)
+              } yield Response.seeOther(URL.decode(authUrl).toOption.get)).mapError(AuthError(_))
+          },
+          // OAuth callback
+          Method.GET / "oauth" / string("provider") / "callback" -> handler {
+            (
+              provider: String,
+              req:      Request
+            ) =>
+              (for {
+                // Extract code and state from query parameters
+                code <- ZIO
+                  .fromOption(req.url.queryParams.queryParam("code"))
+                  .orElseFail(AuthError("Missing 'code' parameter"))
+                state <- ZIO
+                  .fromOption(req.url.queryParams.queryParam("state"))
+                  .orElseFail(AuthError("Missing 'state' parameter"))
+
+                // Validate state (CSRF protection)
+                stateData <- ZIO
+                  .fromOption(stateStore.remove(state))
+                  .orElseFail(AuthError("Invalid or expired state token"))
+                (timestamp, stateProvider) = stateData
+                _ <- ZIO
+                  .fail(AuthError("State token expired"))
+                  .when(timestamp.plusMinutes(10).isBefore(LocalDateTime.now()))
+                _ <- ZIO
+                  .fail(AuthError(s"State provider mismatch: expected $stateProvider, got $provider"))
+                  .when(stateProvider != provider)
+
+                // Exchange code for access token
+                oauthProvider <- oauthService.getProvider(provider)
+                accessToken   <- oauthProvider.exchangeCodeForToken(code)
+
+                // Get user info from provider
+                userInfo <- oauthProvider.getUserInfo(accessToken)
+
+                // Find or create user
+                existingOAuthUser <- userByOAuthProvider(provider, userInfo.providerId)
+                user <- existingOAuthUser match {
+                  case Some(user) =>
+                    // User already linked with this OAuth provider
+                    ZIO.succeed(user)
+
+                  case None =>
+                    // Check if user with same email exists (auto-linking)
+                    userByEmail(userInfo.email).flatMap {
+                      case Some(emailUser) =>
+                        // Link OAuth to existing account
+                        linkOAuthToUser(emailUser, provider, userInfo.providerId, userInfo.rawData)
+
+                      case None =>
+                        // Create new user from OAuth
+                        createOAuthUser(userInfo, provider, None)
+                    }
+                }
+
+                // Create session and return JWT tokens
+                config <- ZIO.service[AuthConfig]
+                responseWithTokens <- addTokens(
+                  Session(user, None),
+                  Response.seeOther(URL.decode("/#index").toOption.get) // Redirect to app
+                )
+              } yield responseWithTokens).mapError(AuthError(_))
+          }
+        )
+      )
+    }
 
   protected def addTokens(
     session:  Session[UserType, ConnectionId],
@@ -268,6 +383,79 @@ trait AuthServer[
 
   def userByEmail(email: String): IO[AuthError, Option[UserType]]
   def userByPK(pk:       UserPK): IO[AuthError, Option[UserType]]
+
+  // OAuth Methods (with default implementations that indicate OAuth is not configured)
+
+  /** Find a user by OAuth provider and provider user ID
+    *
+    * Default implementation returns None (OAuth not implemented). Override to support OAuth authentication.
+    *
+    * @param provider
+    *   OAuth provider name (e.g., "google", "github")
+    * @param providerId
+    *   The unique user ID from the OAuth provider
+    * @return
+    *   The user if found, None otherwise
+    */
+  def userByOAuthProvider(
+    provider:   String,
+    providerId: String
+  ): IO[AuthError, Option[UserType]] = ZIO.none
+
+  /** Create a new user from OAuth provider information
+    *
+    * Default implementation fails with AuthError (OAuth not implemented). Override to support OAuth user creation.
+    *
+    * @param oauthInfo
+    *   Normalized OAuth user information
+    * @param provider
+    *   OAuth provider name (e.g., "google", "github")
+    * @param connectionId
+    *   Optional connection ID for the session
+    * @return
+    *   The created user
+    */
+  def createOAuthUser(
+    oauthInfo:    OAuthUserInfo,
+    provider:     String,
+    connectionId: Option[ConnectionId]
+  ): IO[AuthError, UserType] =
+    ZIO.fail(
+      AuthError(
+        "OAuth user creation not implemented. Override createOAuthUser in your AuthServer implementation."
+      )
+    )
+
+  /** Link an OAuth provider to an existing user account
+    *
+    * This is called when a user logs in with OAuth and an account with the same email already exists (auto-linking
+    * strategy).
+    *
+    * Default implementation fails with AuthError (OAuth not implemented). Override to support linking OAuth to existing
+    * accounts.
+    *
+    * @param user
+    *   The existing user to link to
+    * @param provider
+    *   OAuth provider name (e.g., "google", "github")
+    * @param providerId
+    *   The unique user ID from the OAuth provider
+    * @param providerData
+    *   Raw OAuth data from the provider
+    * @return
+    *   The updated user with OAuth linked
+    */
+  def linkOAuthToUser(
+    user:         UserType,
+    provider:     String,
+    providerId:   String,
+    providerData: Json
+  ): IO[AuthError, UserType] =
+    ZIO.fail(
+      AuthError(
+        "OAuth account linking not implemented. Override linkOAuthToUser in your AuthServer implementation."
+      )
+    )
 
   def jwtDecode(token: String): ZIO[AuthConfig, AuthError, JwtClaim] =
     (for {

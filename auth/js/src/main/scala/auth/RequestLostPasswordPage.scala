@@ -74,7 +74,7 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                 <.h2(^.key := "a", "Reset link sent"),
                 <.div(
                   ^.key := "b",
-                  s"Please check your email ${state.value.email} for instructions to reset your password."
+                  s"Please check your email ${state.value.email} for instructions to reset your password. Make sure you check your SPAM folder!!!"
                 )
               )
             } else {
