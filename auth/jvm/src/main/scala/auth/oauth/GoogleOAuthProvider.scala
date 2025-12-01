@@ -139,7 +139,7 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
                   }
               }
           case Left(error) =>
-            ZIO.fail(AuthError(s"Failed to get user info: $error"))
+            ZIO.fail(AuthError(s"Failed to get user info (status: ${response.code}): $error"))
         }
       }
       .mapError {
