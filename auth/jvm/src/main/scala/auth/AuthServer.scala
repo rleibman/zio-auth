@@ -337,7 +337,7 @@ trait AuthServer[
                 config <- ZIO.service[AuthConfig]
                 responseWithTokens <- addTokens(
                   Session(user, None),
-                  Response.seeOther(URL.decode("/#index").toOption.get) // Redirect to app
+                  Response.seeOther(URL.decode("/#index").toOption.getOrElse(URL.root)) // Redirect to app
                 )
               } yield responseWithTokens).mapError(AuthError(_))
           }
