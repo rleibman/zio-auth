@@ -277,7 +277,9 @@ trait AuthServer[
                 state         <- oauthService.generateState()
                 _             <- ZIO.succeed(stateStore.put(state, (LocalDateTime.now(), provider)))
                 authUrl       <- oauthProvider.generateAuthUrl(state)
-              } yield Response.seeOther(URL.decode(authUrl).toOption.get)).mapError(AuthError(_))
+                url           <- ZIO.fromOption(URL.decode(authUrl).toOption)
+                                      .orElseFail(AuthError(s"Invalid authorization URL: $authUrl"))
+              } yield Response.seeOther(url)).mapError(AuthError(_))
           },
           // OAuth callback
           Method.GET / "oauth" / string("provider") / "callback" -> handler {
