@@ -65,7 +65,7 @@ object LoginRouter {
 
         (
           trimSlashes |
-            staticRoute("#index", LoginPages.Index) ~> render(<.div("Should never get here")) |
+            staticRoute("#blahblah", LoginPages.Index) ~> render(<.div("Should never get here")) |
             staticRoute("#login", LoginPages.Login) ~> renderRP(
               (
                 ctl,

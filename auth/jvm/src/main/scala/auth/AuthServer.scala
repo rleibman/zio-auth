@@ -100,9 +100,9 @@ trait AuthServer[
 
       },
       Method.GET / config.logoutUrl -> handler { (req: Request) =>
-        val token = req.header(Header.Authorization).get.renderedValue.stripPrefix("Bearer ")
+        val token = req.header(Header.Authorization).map(_.renderedValue.stripPrefix("Bearer "))
         for {
-          _ <- invalidateToken(token)
+          _ <- ZIO.foreachDiscard(token)(invalidateToken)
           _ <- logout()
         } yield Response.ok // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
       }
@@ -339,7 +339,7 @@ trait AuthServer[
                 config <- ZIO.service[AuthConfig]
                 responseWithTokens <- addTokens(
                   Session(user, None),
-                  Response.seeOther(URL.decode("/#index").toOption.getOrElse(URL.root)) // Redirect to app
+                  Response.seeOther(URL.root) // Redirect to app
                 )
               } yield responseWithTokens).mapError(AuthError(_))
           }
@@ -514,7 +514,7 @@ trait AuthServer[
         }).catchAll {
           case _: ExpiredToken => ZIO.fail(Response.unauthorized("token_expired"))
           case _: InvalidToken => ZIO.fail(Response.unauthorized)
-          case e => ZIO.fail(Response.badRequest(e.getMessage))
+          case e => ZIO.logErrorCause(Cause.fail(e)) *> ZIO.fail(Response.badRequest(e.getMessage))
         }
       } yield (request, session)
     })
