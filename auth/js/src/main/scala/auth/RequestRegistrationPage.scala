@@ -82,7 +82,7 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                         e => error.modState(_ => Some(s"Error requesting registration: $e")),
                         _ =>
                           error.modState(_ =>
-                            Some("Account created successfully, please await for an email to confirm registration")
+                            Some("Account created successfully, please await for an email to confirm registration. Make sure you check your SPAM folder!!!")
                           ) >> sent.modState(_ => true)
                       )
                     ).completeWith(_.get)
@@ -96,7 +96,7 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                 <.h2(^.key := "a", "Account Creation Submitted"),
                 <.div(
                   ^.key := "b",
-                  s"Please check your email ${state.value.email} for instructions to validate your account creation."
+                  s"Please check your email ${state.value.email} for instructions to validate your account creation. Make sure you check your SPAM folder!!!"
                 )
               )
             } else {

@@ -20,6 +20,7 @@
  */
 
 import auth.*
+import auth.oauth.{OAuthService, OAuthStateStore}
 import zio.*
 import zio.json.{JsonDecoder, JsonEncoder}
 
@@ -115,6 +116,8 @@ object MockAuthEnvironment {
   val mock: ULayer[AuthEnvironment[MockUser, MockUserId, MockConnectionId]] =
     ZLayer.make[AuthEnvironment[MockUser, MockUserId, MockConnectionId]](
       ZLayer.succeed(config),
+      OAuthService.live(), // No OAuth providers configured for test server
+      OAuthStateStore.live(),
       ZLayer.fromZIO(
         for {
           users <- Ref

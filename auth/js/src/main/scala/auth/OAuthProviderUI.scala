@@ -21,7 +21,22 @@
 
 package auth
 
-import auth.oauth.{OAuthService, OAuthStateStore}
+import japgolly.scalajs.react.vdom.VdomNode
 
-type AuthEnvironment[UserType, UserPK, ConnectionId] = AuthConfig & AuthServer[UserType, UserPK, ConnectionId] &
-  OAuthService & OAuthStateStore
+/** Configuration for rendering an OAuth provider button
+  *
+  * @param provider
+  *   Provider name (e.g., "google", "github", "discord")
+  * @param icon
+  *   Optional icon SVG/element to display in button
+  * @param label
+  *   Button text label
+  * @param className
+  *   Optional CSS class(es) for styling
+  */
+case class OAuthProviderUI(
+  provider:  String,
+  icon:      Option[VdomNode] = None,
+  label:     String,
+  className: Option[String] = None
+)

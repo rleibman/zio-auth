@@ -19,9 +19,33 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package auth
+package auth.oauth
 
-import auth.oauth.{OAuthService, OAuthStateStore}
-
-type AuthEnvironment[UserType, UserPK, ConnectionId] = AuthConfig & AuthServer[UserType, UserPK, ConnectionId] &
-  OAuthService & OAuthStateStore
+/** Generic OAuth 2.0 provider configuration
+  *
+  * This is the standard OAuth 2.0 configuration that works for most providers.
+  *
+  * @param clientId
+  *   OAuth 2.0 client ID from provider
+  * @param clientSecret
+  *   OAuth 2.0 client secret from provider
+  * @param authorizationUri
+  *   Provider's authorization endpoint URL
+  * @param tokenUri
+  *   Provider's token exchange endpoint URL
+  * @param userInfoUri
+  *   Provider's user info endpoint URL
+  * @param redirectUri
+  *   Callback URL (must match provider configuration)
+  * @param scopes
+  *   OAuth scopes to request
+  */
+case class OAuthProviderConfig(
+  clientId:         String,
+  clientSecret:     String,
+  authorizationUri: String,
+  tokenUri:         String,
+  userInfoUri:      String,
+  redirectUri:      String,
+  scopes:           List[String]
+)
