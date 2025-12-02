@@ -98,18 +98,24 @@ object AuthClient {
   }
 
   def logout(): AsyncCallback[Unit] = {
-    for {
-      _ <- AsyncCallback.fromFuture(
-        basicRequest
-          .get(uri"/logout")
-          .send(backend)
-      )
-    } yield {
-      AsyncCallback.pure {
-        window.localStorage.removeItem("jwtToken")
-        window.location.reload()
-      }
-    }
+    Callback.log("Logout called").asAsyncCallback >>
+      (for {
+        _ <- Callback.log("Calling /logout endpoint").asAsyncCallback
+        response <- AsyncCallback.fromFuture(
+          basicRequest
+            .get(uri"/logout")
+            .send(backend)
+        )
+        _ <- Callback.log(s"Logout endpoint response: ${response.code}").asAsyncCallback
+        _ <- Callback.log("Removing token from localStorage").asAsyncCallback
+        _ <- AsyncCallback.delay {
+          window.localStorage.removeItem("jwtToken")
+        }
+        _ <- Callback.log("Reloading page...").asAsyncCallback
+        _ <- AsyncCallback.delay {
+          window.location.reload()
+        }
+      } yield ())
   }
 
   def requestLostPassword(request: PasswordRecoveryRequest): AsyncCallback[Either[String, Unit]] =
@@ -205,48 +211,72 @@ object AuthClient {
       )
     }
 
+    def tryRefresh(): AsyncCallback[Either[String, A]] = {
+      Callback.log("Attempting token refresh...").asAsyncCallback >>
+        (for {
+          refreshResponse <- AsyncCallback.fromFuture(
+            basicRequest
+              .get(uri"/refresh")
+              .response(asString)
+              .send(backend)
+          )
+          _ <- Callback.log(s"Refresh response code: ${refreshResponse.code}").asAsyncCallback
+          retried <- refreshResponse.code match {
+            case c if c.isSuccess =>
+              refreshResponse.header(HeaderNames.Authorization) match {
+                case Some(authHeader) =>
+                  val newToken = authHeader.stripPrefix("Bearer ")
+                  Callback.log(s"Refresh successful, got new token (length: ${newToken.length})").asAsyncCallback >>
+                    AsyncCallback.delay {
+                      window.localStorage.setItem("jwtToken", newToken)
+                    } >>
+                    doCall(newToken).map(_.body)
+                case None =>
+                  val msg = "Server said refresh was ok, but didn't return a token"
+                  Callback.log(msg).asAsyncCallback >>
+                    onAuthError(msg) >> AsyncCallback.pure(Left(msg))
+              }
+            case c =>
+              val msg = s"Refresh failed with status: $c, body: ${refreshResponse.body}"
+              Callback.log(msg).asAsyncCallback >>
+                onAuthError(msg) >> AsyncCallback.pure(Left(msg))
+          }
+        } yield retried)
+    }
+
     for {
       tokOpt      <- asyncJwtToken
+      _           <- Callback.log(s"withAuth: token in localStorage: ${tokOpt.isDefined}").asAsyncCallback
       responseOpt <- AsyncCallback.traverseOption(tokOpt)(doCall)
       withRefresh <- responseOpt match {
         case Some(response)
             if response.code == StatusCode.Unauthorized && response.body.left.exists(_.contains("token_expired")) =>
-          Callback.log("Refreshing token").asAsyncCallback >>
-            // Call refresh endpoint
-            (for {
-              refreshResponse <- AsyncCallback.fromFuture(
-                basicRequest
-                  .get(uri"/refresh")
-                  .response(asString)
-                  .send(backend)
-              )
-              retried <- refreshResponse.code match {
-                case c if c.isSuccess =>
-                  refreshResponse.header(HeaderNames.Authorization) match {
-                    case Some(authHeader) =>
-                      val newToken = authHeader.stripPrefix("Bearer ")
-                      window.localStorage.setItem("jwtToken", newToken)
-                      doCall(newToken).map(_.body)
-                    case None =>
-                      val msg = "Server said refresh was ok, but didn't return a token"
-                      onAuthError(msg) >> AsyncCallback.pure(Left(msg))
-                  }
-                case c =>
-                  val msg = s"Trying to get Refresh token got $c"
-                  onAuthError(msg) >> AsyncCallback.pure(Left(msg))
-              }
-            } yield retried)
+          // Token expired, try to refresh
+          Callback.log("Token expired, refreshing...").asAsyncCallback >> tryRefresh()
         case None =>
-          val msg = "No token set, please log in"
-          onAuthError(msg) >> AsyncCallback.pure(Left(msg))
+          // No token in localStorage - might be fresh OAuth login with only refresh cookie
+          // Try to refresh first before giving up
+          Callback.log("No token in localStorage, attempting refresh from cookie...").asAsyncCallback >>
+            tryRefresh().flatMap {
+              case Left(err) =>
+                // Refresh failed, now show login error
+                Callback.log(s"Refresh from cookie failed: $err").asAsyncCallback >>
+                  AsyncCallback.pure(Left(err))
+              case right @ Right(_) =>
+                // Refresh succeeded
+                Callback.log("Refresh from cookie succeeded!").asAsyncCallback >>
+                  AsyncCallback.pure(right)
+            }
         case Some(other) if !other.code.isSuccess =>
-          AsyncCallback.pure {
-            // Clear the token
-            window.localStorage.removeItem("jwtToken")
-          } >>
+          Callback.log(s"Request failed with ${other.code}, clearing token").asAsyncCallback >>
+            AsyncCallback.pure {
+              // Clear the token
+              window.localStorage.removeItem("jwtToken")
+            } >>
             AsyncCallback.pure(other.body) // Success, or some other "normal" error, pass it along
         case Some(other) =>
-          AsyncCallback.pure(other.body) // Success, or some other "normal" error, pass it along
+          Callback.log(s"Request succeeded with ${other.code}").asAsyncCallback >>
+            AsyncCallback.pure(other.body) // Success, or some other "normal" error, pass it along
       }
     } yield withRefresh
   }

@@ -146,17 +146,18 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r1 <- app.run(
             Request.post(config.requestPasswordRecoveryUrl, Body.fromString("""{"email":"goodUser3@example.com"}"""))
           )
-          confirmUrl <- authServer.confirmUrlForEmail("goodUser3@example.com")
-          url = confirmUrl.flatMap(URL.decode(_).toOption).get
-          recoveryRequest = PasswordRecoveryNewPasswordRequest(
-            url.queryParam("code").get,
-            "newPasswordGoodUser3"
-          ).toJson
-          r2 <- app.run(Request.post(url, Body.fromString(recoveryRequest)))
+          confirmUrlOpt <- authServer.confirmUrlForEmail("goodUser3@example.com")
+          _             <- ZIO.fromOption(confirmUrlOpt).orElseFail(new Exception("No confirmation URL found"))
+          url = confirmUrlOpt.flatMap(URL.decode(_).toOption).get
+          // Extract code from fragment (hash-based routing: #passwordRecovery?code=...)
+          fragment = url.fragment.map(_.decoded).getOrElse("")
+          code = fragment.split("code=").lastOption.getOrElse("")
+          recoveryRequest = PasswordRecoveryNewPasswordRequest(code, "newPasswordGoodUser3").toJson
+          r2 <- app.run(Request.post(config.passwordRecoveryUrl, Body.fromString(recoveryRequest)))
           r4 <- doLogin("goodUser3@example.com", "newPasswordGoodUser3")
         } yield assertTrue(
           r1.status.isSuccess,
-          url.path.toString.startsWith(config.passwordRecoveryUrl),
+          fragment.startsWith(config.passwordRecoveryUrl.stripPrefix("/")), // Fragment doesn't have leading /
           r2.status.isSuccess,
           r4.status.isSuccess
         )
@@ -186,12 +187,16 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r1 <- app.run(
             Request.post(config.requestRegistrationUrl, Body.fromString(requestString))
           )
-          confirmUrl <- authServer.confirmUrlForEmail("newUser@example.com")
-          url = confirmUrl.flatMap(URL.decode(_).toOption).get
-          r2 <- app.run(Request.get(url))
+          confirmUrlOpt <- authServer.confirmUrlForEmail("newUser@example.com")
+          _             <- ZIO.fromOption(confirmUrlOpt).orElseFail(new Exception("No confirmation URL found"))
+          url = confirmUrlOpt.flatMap(URL.decode(_).toOption).get
+          // Extract code from fragment (hash-based routing: #confirmRegistration?code=...)
+          fragment = url.fragment.map(_.decoded).getOrElse("")
+          code = fragment.split("code=").lastOption.getOrElse("")
+          r2 <- app.run(Request.post(config.confirmRegistrationUrl, Body.fromString(code.toJson)))
         } yield assertTrue(
           r1.status.isSuccess,
-          url.path.toString.startsWith(config.confirmRegistrationUrl),
+          fragment.startsWith(config.confirmRegistrationUrl.stripPrefix("/")), // Fragment doesn't have leading /
           r2.status.isSuccess
         )
       },

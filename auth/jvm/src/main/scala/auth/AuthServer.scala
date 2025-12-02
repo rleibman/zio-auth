@@ -21,7 +21,7 @@
 
 package auth
 
-import auth.oauth.{OAuthService, OAuthUserInfo}
+import auth.oauth.{OAuthService, OAuthStateStore, OAuthUserInfo}
 import pdi.jwt.*
 import pdi.jwt.exceptions.JwtExpirationException
 import zio.*
@@ -102,13 +102,28 @@ trait AuthServer[
       Method.GET / config.logoutUrl -> handler { (req: Request) =>
         val token = req.header(Header.Authorization).map(_.renderedValue.stripPrefix("Bearer "))
         for {
-          _ <- ZIO.foreachDiscard(token)(invalidateToken)
-          _ <- logout()
-        } yield Response.ok // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
+          config <- ZIO.service[AuthConfig]
+          _      <- ZIO.foreachDiscard(token)(invalidateToken)
+          _      <- logout()
+          _      <- ZIO.logInfo("User logged out, clearing refresh cookie")
+        } yield Response.ok
+          // Clear the refresh cookie by setting it to expire immediately
+          .addCookie(
+            Cookie.Response(
+              name = config.refreshTokenName,
+              content = "",
+              maxAge = Some(Duration.Zero),
+              domain = None,
+              path = Some(Path.decode("/refresh")),
+              isSecure = true,
+              isHttpOnly = true,
+              sameSite = Some(SameSite.Strict)
+            )
+          )
       }
     )
 
-  def unauthRoutes: URIO[AuthConfig & OAuthService, Routes[AuthConfig, AuthError]] =
+  def unauthRoutes: URIO[AuthConfig & OAuthService & OAuthStateStore, Routes[AuthConfig, AuthError]] =
     for {
       config      <- ZIO.service[AuthConfig]
       oauthRoutes <- oauthUnauthRoutes
@@ -247,24 +262,9 @@ trait AuthServer[
     * Note: This method requires OAuthService in the environment. If not provided, it will fail at runtime. Use
     * ZLayer.succeed(OAuthService.live(None)) to disable OAuth.
     */
-  private def oauthUnauthRoutes: URIO[AuthConfig & OAuthService, Routes[AuthConfig, AuthError]] =
+  private def oauthUnauthRoutes: URIO[AuthConfig & OAuthService & OAuthStateStore, Routes[AuthConfig, AuthError]] =
     ZIO.serviceWithZIO[OAuthService] { oauthService =>
-      // State store for CSRF protection (state -> (timestamp, provider))
-      val stateStore = scala.collection.concurrent.TrieMap.empty[String, (LocalDateTime, String)]
-
-      // Cleanup expired states periodically (every 5 minutes)
-      val cleanupSchedule = Schedule.fixed(5.minutes)
-      val cleanupFiber = ZIO
-        .succeed {
-          val now = LocalDateTime.now()
-          stateStore.filterInPlace { case (_, (timestamp, _)) =>
-            timestamp.plusMinutes(10).isAfter(now)
-          }
-        }
-        .repeat(cleanupSchedule)
-        .forkDaemon
-
-      cleanupFiber *> ZIO.succeed(
+      ZIO.serviceWith[OAuthStateStore] { stateStore =>
         Routes(
           // OAuth login initiation
           Method.GET / "oauth" / string("provider") / "login" -> handler {
@@ -275,10 +275,11 @@ trait AuthServer[
               (for {
                 oauthProvider <- oauthService.getProvider(provider)
                 state         <- oauthService.generateState()
-                _             <- ZIO.succeed(stateStore.put(state, (LocalDateTime.now(), provider)))
+                _             <- stateStore.put(state, LocalDateTime.now(), provider)
                 authUrl       <- oauthProvider.generateAuthUrl(state)
-                url           <- ZIO.fromOption(URL.decode(authUrl).toOption)
-                                      .orElseFail(AuthError(s"Invalid authorization URL: $authUrl"))
+                url <- ZIO
+                  .fromOption(URL.decode(authUrl).toOption)
+                  .orElseFail(AuthError(s"Invalid authorization URL: $authUrl"))
               } yield Response.seeOther(url)).mapError(AuthError(_))
           },
           // OAuth callback
@@ -288,6 +289,9 @@ trait AuthServer[
               req:      Request
             ) =>
               (for {
+                _ <- ZIO.logInfo(s"OAuth callback received for provider: $provider")
+                _ <- ZIO.logInfo(s"Request URL: ${req.url}")
+
                 // Extract code and state from query parameters
                 code <- ZIO
                   .fromOption(req.url.queryParams.queryParam("code"))
@@ -296,10 +300,12 @@ trait AuthServer[
                   .fromOption(req.url.queryParams.queryParam("state"))
                   .orElseFail(AuthError("Missing 'state' parameter"))
 
+                _ <- ZIO.logInfo(s"OAuth code and state extracted successfully")
+
                 // Validate state (CSRF protection)
-                stateData <- ZIO
-                  .fromOption(stateStore.remove(state))
-                  .orElseFail(AuthError("Invalid or expired state token"))
+                stateData <- stateStore.remove(state).flatMap {
+                  ZIO.fromOption(_).orElseFail(AuthError("Invalid or expired state token"))
+                }
                 (timestamp, stateProvider) = stateData
                 _ <- ZIO
                   .fail(AuthError("State token expired"))
@@ -308,32 +314,43 @@ trait AuthServer[
                   .fail(AuthError(s"State provider mismatch: expected $stateProvider, got $provider"))
                   .when(stateProvider != provider)
 
+                _ <- ZIO.logInfo(s"State validated successfully")
+
                 // Exchange code for access token
                 oauthProvider <- oauthService.getProvider(provider)
                 accessToken   <- oauthProvider.exchangeCodeForToken(code)
 
+                _ <- ZIO.logInfo(s"Access token obtained from provider")
+
                 // Get user info from provider
                 userInfo <- oauthProvider.getUserInfo(accessToken)
+
+                _ <- ZIO.logInfo(s"User info obtained: email=${userInfo.email}, providerId=${userInfo.providerId}")
 
                 // Find or create user
                 existingOAuthUser <- userByOAuthProvider(provider, userInfo.providerId)
                 user <- existingOAuthUser match {
                   case Some(user) =>
                     // User already linked with this OAuth provider
-                    ZIO.succeed(user)
+                    ZIO.logInfo(s"Existing OAuth user found: $user") *> ZIO.succeed(user)
 
                   case None =>
-                    // Check if user with same email exists (auto-linking)
-                    userByEmail(userInfo.email).flatMap {
-                      case Some(emailUser) =>
-                        // Link OAuth to existing account
-                        linkOAuthToUser(emailUser, provider, userInfo.providerId, userInfo.rawData)
+                    ZIO.logInfo(s"No existing OAuth user, checking email") *>
+                      // Check if user with same email exists (auto-linking)
+                      userByEmail(userInfo.email).flatMap {
+                        case Some(emailUser) =>
+                          // Link OAuth to existing account
+                          ZIO.logInfo(s"Linking OAuth to existing user: $emailUser") *>
+                            linkOAuthToUser(emailUser, provider, userInfo.providerId, userInfo.rawData)
 
-                      case None =>
-                        // Create new user from OAuth
-                        createOAuthUser(userInfo, provider, None)
-                    }
+                        case None =>
+                          // Create new user from OAuth
+                          ZIO.logInfo(s"Creating new OAuth user") *>
+                            createOAuthUser(userInfo, provider, None)
+                      }
                 }
+
+                _ <- ZIO.logInfo(s"User authenticated: $user")
 
                 // Create session and return JWT tokens
                 config <- ZIO.service[AuthConfig]
@@ -341,10 +358,15 @@ trait AuthServer[
                   Session(user, None),
                   Response.seeOther(URL.root) // Redirect to app
                 )
-              } yield responseWithTokens).mapError(AuthError(_))
+
+                _ <- ZIO.logInfo(s"Tokens added, redirecting to: ${URL.root}")
+                _ <- ZIO.logInfo(s"Response headers: ${responseWithTokens.headers}")
+              } yield responseWithTokens)
+                .mapError(AuthError(_))
+                .tapError(e => ZIO.logError(s"OAuth callback error: ${e.getMessage}"))
           }
         )
-      )
+      }
     }
 
   protected def addTokens(

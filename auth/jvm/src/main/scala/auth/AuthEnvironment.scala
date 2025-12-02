@@ -21,7 +21,7 @@
 
 package auth
 
-import auth.oauth.OAuthService
+import auth.oauth.{OAuthService, OAuthStateStore}
 
 type AuthEnvironment[UserType, UserPK, ConnectionId] = AuthConfig & AuthServer[UserType, UserPK, ConnectionId] &
-  OAuthService
+  OAuthService & OAuthStateStore

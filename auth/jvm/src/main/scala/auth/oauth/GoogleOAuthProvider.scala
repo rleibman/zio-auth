@@ -66,8 +66,6 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
 
     given JsonDecoder[TokenResponse] = JsonDecoder.derived[TokenResponse]
 
-    val backend = HttpClientZioBackend()
-
     val request = basicRequest
       .post(uri"${config.tokenUri}")
       .body(
@@ -81,16 +79,18 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
       )
       .response(asJson[TokenResponse])
 
-    backend
-      .flatMap(_.send(request))
-      .flatMap { response =>
-        response.body match {
-          case Right(tokenResponse) => ZIO.succeed(tokenResponse.access_token)
-          case Left(error) =>
-            ZIO.fail(AuthError(s"Failed to exchange code for token: ${error.getMessage}"))
-        }
-      }
-      .mapError {
+    ZIO
+      .scoped {
+        HttpClientZioBackend()
+          .flatMap(_.send(request))
+          .flatMap { response =>
+            response.body match {
+              case Right(tokenResponse) => ZIO.succeed(tokenResponse.access_token)
+              case Left(error) =>
+                ZIO.fail(AuthError(s"Failed to exchange code for token: ${error.getMessage}"))
+            }
+          }
+      }.mapError {
         case e: AuthError => e
         case e: Throwable => AuthError(s"Token exchange failed: ${e.getMessage}", e)
       }
@@ -107,42 +107,42 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
 
     given JsonDecoder[GoogleUserInfo] = JsonDecoder.derived[GoogleUserInfo]
 
-    val backend = HttpClientZioBackend()
-
     val request = basicRequest
       .get(uri"${config.userInfoUri}")
       .auth
       .bearer(accessToken)
       .response(asString)
 
-    backend
-      .flatMap(_.send(request))
-      .flatMap { response =>
-        response.body match {
-          case Right(jsonStr) =>
-            ZIO
-              .fromEither(jsonStr.fromJson[Json])
-              .mapError(e => AuthError(s"Failed to parse user info JSON: $e"))
-              .flatMap { rawJson =>
+    ZIO
+      .scoped {
+        HttpClientZioBackend()
+          .flatMap(_.send(request))
+          .flatMap { response =>
+            response.body match {
+              case Right(jsonStr) =>
                 ZIO
-                  .fromEither(jsonStr.fromJson[GoogleUserInfo])
-                  .mapError(e => AuthError(s"Failed to decode Google user info: $e"))
-                  .map { googleInfo =>
-                    OAuthUserInfo(
-                      providerId = googleInfo.sub,
-                      email = googleInfo.email,
-                      name = googleInfo.name,
-                      avatarUrl = googleInfo.picture,
-                      emailVerified = googleInfo.email_verified,
-                      rawData = rawJson
-                    )
+                  .fromEither(jsonStr.fromJson[Json])
+                  .mapError(e => AuthError(s"Failed to parse user info JSON: $e"))
+                  .flatMap { rawJson =>
+                    ZIO
+                      .fromEither(jsonStr.fromJson[GoogleUserInfo])
+                      .mapError(e => AuthError(s"Failed to decode Google user info: $e"))
+                      .map { googleInfo =>
+                        OAuthUserInfo(
+                          providerId = googleInfo.sub,
+                          email = googleInfo.email,
+                          name = googleInfo.name,
+                          avatarUrl = googleInfo.picture,
+                          emailVerified = googleInfo.email_verified,
+                          rawData = rawJson
+                        )
+                      }
                   }
-              }
-          case Left(error) =>
-            ZIO.fail(AuthError(s"Failed to get user info (status: ${response.code}): $error"))
-        }
-      }
-      .mapError {
+              case Left(error) =>
+                ZIO.fail(AuthError(s"Failed to get user info (status: ${response.code}): $error"))
+            }
+          }
+      }.mapError {
         case e: AuthError => e
         case e: Throwable => AuthError(s"Get user info failed: ${e.getMessage}", e)
       }
