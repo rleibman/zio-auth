@@ -22,7 +22,7 @@ Global / watchAntiEntropy := 1.second
 
 val zioConfigVersion = "4.0.6"
 val zioHttpVersion = "3.7.4"
-val zioJsonVersion = "0.8.0"
+val zioJsonVersion = "0.7.44"
 val zioVersion = "2.1.24"
 val scalajsReactVersion = "3.0.0"
 val reactVersion = "^18.3.0"
