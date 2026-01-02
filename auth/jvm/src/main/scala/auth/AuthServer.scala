@@ -87,18 +87,6 @@ trait AuthServer[
           case _                                   => Response.unauthorized("No session")
         }
       },
-      Method.POST / "api" / "changePassword" -> handler { (req: Request) =>
-        for {
-          user <- ZIO.serviceWithZIO[Session[UserType, ConnectionId]] {
-            case AuthenticatedSession(user, _) => ZIO.succeed(user)
-            case _                             => ZIO.fail(NotAuthenticated)
-          }
-          body <- req.body.asString.mapError(e => AuthError(e.getMessage, e))
-          newPass = body // Assuming the body contains the new password
-          _ <- changePassword(getPK(user.get), newPass)
-        } yield Response.ok // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
-
-      },
       Method.GET / config.logoutUrl -> handler { (req: Request) =>
         val token = req.header(Header.Authorization).map(_.renderedValue.stripPrefix("Bearer "))
         for {
