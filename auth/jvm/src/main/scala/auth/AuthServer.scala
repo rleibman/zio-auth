@@ -174,7 +174,7 @@ trait AuthServer[
           // Create the user, but set it to inactive and save it
           _ <- ZIO
             .fail(EmailAlreadyExists(s"Email already exists ${validated.email}"))
-            .whenZIO(userByEmail(validated.email).map(_.isDefined))
+            .whenZIO(userByEmail(validated.email).map(u => u.isDefined))
           user <- createUser(
             validated.name,
             validated.email,
@@ -337,7 +337,7 @@ trait AuthServer[
                   case None =>
                     ZIO.logInfo(s"No existing OAuth user, checking email") *>
                       // Check if user with same email exists (auto-linking)
-                      userByEmail(userInfo.email).flatMap {
+                      userByEmail(userInfo.email, false).flatMap {
                         case Some(emailUser) =>
                           // Link OAuth to existing account
                           ZIO.logInfo(s"Linking OAuth to existing user: $emailUser") *>
@@ -405,7 +405,7 @@ trait AuthServer[
     newPassword: String
   ): ZIO[Session[UserType, ConnectionId], AuthError, Unit]
 
-  def userByEmail(email: String): IO[AuthError, Option[UserType]]
+  def userByEmail(email: String, allowInactive: Boolean): IO[AuthError, Option[UserType]]
   def userByPK(pk:       UserPK): IO[AuthError, Option[UserType]]
 
   // OAuth Methods (with default implementations that indicate OAuth is not configured)
