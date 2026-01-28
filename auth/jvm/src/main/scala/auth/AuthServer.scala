@@ -493,6 +493,35 @@ trait AuthServer[
       Jwt.encode(claim, config.secretKey.key, JwtAlgorithm.HS512)
     }
 
+  /** Creates a ZLayer containing a Session from a token string.
+    *
+    * This is useful for WebSocket connections where the authorization header cannot be set. Instead, the token can be
+    * passed as part of the subscription arguments and validated here.
+    *
+    * @param token
+    *   The JWT token string to decode
+    * @param connectionId
+    *   Optional connection ID to associate with the session
+    * @return
+    *   A ZIO that produces a ZLayer containing the decoded Session. The outer ZIO can fail with AuthError (expired
+    *   token, invalid token, etc.). The inner ZLayer is infallible once created.
+    */
+  def sessionLayerFromToken(
+    token:        String,
+    connectionId: Option[ConnectionId] = None
+  ): ZIO[AuthConfig, AuthError, ZLayer[Any, Nothing, Session[UserType, ConnectionId]]] =
+    for {
+      _     <- ZIO.fail(InvalidToken("Token is invalid")).whenZIO(isInvalid(token))
+      claim <- jwtDecode(token)
+      u     <- claim.decodedContent[Session[UserType, ConnectionId]]
+      session = (u match {
+        case authenticated: AuthenticatedSession[UserType, ConnectionId] =>
+          authenticated.copy(connectionId = connectionId)
+        case unauthenticated: UnauthenticatedSession[UserType, ConnectionId] =>
+          unauthenticated.copy(connectionId = connectionId)
+      }).asInstanceOf[Session[UserType, ConnectionId]]
+    } yield ZLayer.succeed(session)
+
   def bearerSessionProvider: HandlerAspect[AuthConfig, Session[UserType, ConnectionId]] =
     HandlerAspect.interceptIncomingHandler(Handler.fromFunctionZIO[Request] { request =>
       val refreshUrl = URL.decode("/refresh").toOption.get

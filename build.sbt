@@ -11,7 +11,7 @@ enablePlugins(
   GitVersioning
 )
 
-lazy val SCALA = "3.7.4"
+lazy val SCALA = "3.8.1"
 Global / onChangedBuildSource := ReloadOnSourceChanges
 scalaVersion                  := SCALA
 Global / scalaVersion         := SCALA
@@ -21,12 +21,12 @@ import scala.concurrent.duration.*
 Global / watchAntiEntropy := 1.second
 
 val zioConfigVersion = "4.0.6"
-val zioHttpVersion = "3.7.4"
+val zioHttpVersion = "3.8.0"
 val zioJsonVersion = "0.7.44"
 val zioVersion = "2.1.24"
 val scalajsReactVersion = "3.0.0"
 val reactVersion = "^18.3.0"
-val sttpVersion = "4.0.13"
+val sttpVersion = "4.0.15"
 
 lazy val scala3Opts = Seq(
   "-deprecation", // Emit warning and location for usages of deprecated APIs.
@@ -74,7 +74,7 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
     scalaVersion := SCALA,
     libraryDependencies ++= Seq(
       // Log
-      "ch.qos.logback" % "logback-classic" % "1.5.23" withSources (),
+      "ch.qos.logback" % "logback-classic" % "1.5.26" withSources (),
       // ZIO
       "dev.zio"                       %% "zio"                   % zioVersion withSources (),
       "dev.zio"                       %% "zio-nio"               % "2.0.2" withSources (),
@@ -83,7 +83,7 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
       "dev.zio"                       %% "zio-config-derivation" % zioConfigVersion withSources (),
       "dev.zio"                       %% "zio-config-magnolia"   % zioConfigVersion withSources (),
       "dev.zio"                       %% "zio-config-typesafe"   % zioConfigVersion withSources (),
-      "dev.zio"                       %% "zio-logging-slf4j2"    % "2.5.2" withSources (),
+      "dev.zio"                       %% "zio-logging-slf4j2"    % "2.5.3" withSources (),
       "dev.zio"                       %% "zio-http"              % zioHttpVersion withSources (),
       "com.github.jwt-scala"          %% "jwt-circe"             % "11.0.3" withSources (),
       "dev.zio"                       %% "zio-json"              % zioJsonVersion withSources (),
@@ -189,7 +189,7 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
     publish / skip := true,
     libraryDependencies ++= Seq(
       // Log
-      "ch.qos.logback" % "logback-classic" % "1.5.22" withSources (),
+      "ch.qos.logback" % "logback-classic" % "1.5.26" withSources (),
       // ZIO
       "dev.zio"                %% "zio"                   % zioVersion withSources (),
       "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
@@ -198,7 +198,7 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
       "dev.zio"                %% "zio-config-derivation" % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-magnolia"   % zioConfigVersion withSources (),
       "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
-      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.2" withSources (),
+      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.3" withSources (),
       "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
       "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.3" withSources (),
       "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
