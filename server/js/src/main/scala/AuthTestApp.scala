@@ -26,6 +26,7 @@ import japgolly.scalajs.react.{CtorType, *}
 import org.scalajs.dom
 import sttp.client4.basicRequest
 
+import scala.scalajs.js
 import scala.scalajs.js.annotation.JSExport
 
 object AuthTestApp {
@@ -73,7 +74,12 @@ object AuthTestApp {
         )
       )
 
-    component().renderIntoDOM(dom.document.getElementById("content"))
+    js.Dynamic.global.document.title =
+      if (org.scalajs.dom.window.location.protocol == "https:") "DMScreen" else "DMScreen (Local)"
+    val container = dom.document.getElementById("content")
+    val root = ReactDOMClient.createRoot(container)
+    root.render(component())
+    
     ()
 
   }

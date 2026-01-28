@@ -73,7 +73,7 @@ object TestServer extends ZIOApp {
                 .map(f => Handler.fromFile(f).mapError(AuthError(_)))
                 .catchAll { e =>
                   ZIO.succeed(Handler.succeed(Response.notFound(e.getMessage)))
-                }
+                }.map(_.contramap[(Path, Request)](_._2))
           }.flatten
       )
     )

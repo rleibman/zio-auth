@@ -41,7 +41,7 @@ lazy val scala3Opts = Seq(
   //  "-language:strictEquality", //This is cool, but super noisy
   "-unchecked", // Enable additional warnings where generated code depends on assumptions.
   //  "-Wsafe-init", //Great idea, breaks compile though.
-  "-Xfatal-warnings", // Fail the compilation if there are any warnings.
+  "-Werror", // Fail the compilation if there are any warnings.
   "-Xmax-inlines",
   "128",
   //  "-explain-types", // Explain type errors in more detail.
@@ -76,24 +76,24 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
       // Log
       "ch.qos.logback" % "logback-classic" % "1.5.26" withSources (),
       // ZIO
-      "dev.zio"                       %% "zio"                   % zioVersion withSources (),
-      "dev.zio"                       %% "zio-nio"               % "2.0.2" withSources (),
-      "dev.zio"                       %% "zio-cache"             % "0.2.7" withSources (),
-      "dev.zio"                       %% "zio-config"            % zioConfigVersion withSources (),
-      "dev.zio"                       %% "zio-config-derivation" % zioConfigVersion withSources (),
-      "dev.zio"                       %% "zio-config-magnolia"   % zioConfigVersion withSources (),
-      "dev.zio"                       %% "zio-config-typesafe"   % zioConfigVersion withSources (),
-      "dev.zio"                       %% "zio-logging-slf4j2"    % "2.5.3" withSources (),
-      "dev.zio"                       %% "zio-http"              % zioHttpVersion withSources (),
-      "com.github.jwt-scala"          %% "jwt-circe"             % "11.0.3" withSources (),
-      "dev.zio"                       %% "zio-json"              % zioJsonVersion withSources (),
-      "org.scala-lang.modules"        %% "scala-xml"             % "2.3.0" withSources (),
+      "dev.zio"                %% "zio"                   % zioVersion withSources (),
+      "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
+      "dev.zio"                %% "zio-cache"             % "0.2.7" withSources (),
+      "dev.zio"                %% "zio-config"            % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-config-derivation" % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-config-magnolia"   % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-config-typesafe"   % zioConfigVersion withSources (),
+      "dev.zio"                %% "zio-logging-slf4j2"    % "2.5.3" withSources (),
+      "dev.zio"                %% "zio-http"              % zioHttpVersion withSources (),
+      "com.github.jwt-scala"   %% "jwt-circe"             % "11.0.3" withSources (),
+      "dev.zio"                %% "zio-json"              % zioJsonVersion withSources (),
+      "org.scala-lang.modules" %% "scala-xml"             % "2.3.0" withSources (),
       // HTTP client for OAuth providers
-      "com.softwaremill.sttp.client4" %% "core"                  % sttpVersion withSources (),
-      "com.softwaremill.sttp.client4" %% "zio"                   % sttpVersion withSources (),
-      "com.softwaremill.sttp.client4" %% "zio-json"              % sttpVersion withSources (),
+      "com.softwaremill.sttp.client4" %% "core"     % sttpVersion withSources (),
+      "com.softwaremill.sttp.client4" %% "zio"      % sttpVersion withSources (),
+      "com.softwaremill.sttp.client4" %% "zio-json" % sttpVersion withSources (),
       // Other random utilities
-      "com.github.daddykotex"         %% "courier"               % "4.0.0-RC1" withSources (),
+      "com.github.daddykotex" %% "courier" % "4.0.0-RC1" withSources (),
       // Testing
       "dev.zio" %% "zio-test"     % zioVersion % "test" withSources (),
       "dev.zio" %% "zio-test-sbt" % zioVersion % "test" withSources ()

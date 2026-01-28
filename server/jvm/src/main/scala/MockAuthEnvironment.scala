@@ -89,7 +89,7 @@ object MockAuthEnvironment {
         case Some(m) => m.group(1)
         case None    => ""
       }
-      res
+      res.asInstanceOf[String]
     }
 
     override def sendEmail(
