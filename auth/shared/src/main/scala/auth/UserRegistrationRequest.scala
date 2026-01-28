@@ -29,7 +29,7 @@ import zio.json.*
 case class UserRegistrationRequest(
   name:     String = "",
   email:    String = "",
-  password: String = "",
+  password: String = ""
 )
 
 object UserRegistrationRequest {
