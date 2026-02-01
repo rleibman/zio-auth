@@ -7,6 +7,7 @@ import scala.collection.Seq
 lazy val dist = TaskKey[File]("dist")
 lazy val debugDist = TaskKey[File]("debugDist")
 
+
 enablePlugins(
   GitVersioning
 )
@@ -22,7 +23,7 @@ Global / watchAntiEntropy := 1.second
 
 val zioConfigVersion = "4.0.6"
 val zioHttpVersion = "3.8.1"
-val zioJsonVersion = "0.8.0"
+val zioJsonVersion = "0.7.44"
 val zioVersion = "2.1.24"
 val scalajsReactVersion = "3.0.0"
 val reactVersion = "^18.3.0"
@@ -70,8 +71,8 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
   .jvmEnablePlugins(GitVersioning)
   .jsEnablePlugins(GitVersioning)
   .jvmSettings(
-    name         := "zio-auth",
-    scalaVersion := SCALA,
+    name                             := "zio-auth",
+    scalaVersion                     := SCALA,
     libraryDependencies ++= Seq(
       // Log
       "ch.qos.logback" % "logback-classic" % "1.5.27" withSources (),
