@@ -79,7 +79,7 @@ object AuthTestApp {
     val container = dom.document.getElementById("content")
     val root = ReactDOMClient.createRoot(container)
     root.render(component())
-    
+
     ()
 
   }
