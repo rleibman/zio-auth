@@ -23,11 +23,11 @@ Global / watchAntiEntropy := 1.second
 
 val zioConfigVersion = "4.0.6"
 val zioHttpVersion = "3.8.1"
-val zioJsonVersion = "0.7.44"
+val zioJsonVersion = "0.9.0"
 val zioVersion = "2.1.24"
 val scalajsReactVersion = "3.0.0"
 val reactVersion = "^18.3.0"
-val sttpVersion = "4.0.15"
+val sttpVersion = "4.0.18"
 
 lazy val scala3Opts = Seq(
   "-deprecation", // Emit warning and location for usages of deprecated APIs.
@@ -75,7 +75,7 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
     scalaVersion                     := SCALA,
     libraryDependencies ++= Seq(
       // Log
-      "ch.qos.logback" % "logback-classic" % "1.5.27" withSources (),
+      "ch.qos.logback" % "logback-classic" % "1.5.32" withSources (),
       // ZIO
       "dev.zio"                %% "zio"                   % zioVersion withSources (),
       "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
