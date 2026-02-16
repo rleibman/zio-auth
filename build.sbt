@@ -7,16 +7,14 @@ import scala.collection.Seq
 lazy val dist = TaskKey[File]("dist")
 lazy val debugDist = TaskKey[File]("debugDist")
 
-
 enablePlugins(
   GitVersioning
 )
 
 lazy val SCALA = "3.8.1"
-Global / onChangedBuildSource := ReloadOnSourceChanges
-scalaVersion                  := SCALA
-Global / scalaVersion         := SCALA
-
+Global / onChangedBuildSource                     := ReloadOnSourceChanges
+scalaVersion                                      := SCALA
+Global / scalaVersion                             := SCALA
 import scala.concurrent.duration.*
 
 Global / watchAntiEntropy := 1.second
@@ -51,6 +49,8 @@ lazy val scala3Opts = Seq(
   "-Yretain-trees" // Retain trees for debugging.,
 )
 
+ThisBuild / libraryDependencySchemes += "dev.zio" %% "zio-json" % VersionScheme.Always
+
 lazy val commonSettings = Seq(
   organization     := "net.leibman",
   startYear        := Some(2025),
@@ -71,8 +71,8 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
   .jvmEnablePlugins(GitVersioning)
   .jsEnablePlugins(GitVersioning)
   .jvmSettings(
-    name                             := "zio-auth",
-    scalaVersion                     := SCALA,
+    name         := "zio-auth",
+    scalaVersion := SCALA,
     libraryDependencies ++= Seq(
       // Log
       "ch.qos.logback" % "logback-classic" % "1.5.32" withSources (),
@@ -98,7 +98,9 @@ lazy val auth = crossProject(JSPlatform, JVMPlatform)
       // Testing
       "dev.zio" %% "zio-test"     % zioVersion % "test" withSources (),
       "dev.zio" %% "zio-test-sbt" % zioVersion % "test" withSources ()
-    )
+    ),
+    dependencyOverrides += "dev.zio" %% "zio-json"        % "0.9.0",
+    dependencyOverrides += "dev.zio" %% "zio-schema-json" % "1.8.0"
   )
   .jsEnablePlugins(ScalaJSBundlerPlugin)
   .jsSettings(
@@ -190,7 +192,7 @@ lazy val server = crossProject(JSPlatform, JVMPlatform)
     publish / skip := true,
     libraryDependencies ++= Seq(
       // Log
-      "ch.qos.logback" % "logback-classic" % "1.5.27" withSources (),
+      "ch.qos.logback" % "logback-classic" % "1.5.32" withSources (),
       // ZIO
       "dev.zio"                %% "zio"                   % zioVersion withSources (),
       "dev.zio"                %% "zio-nio"               % "2.0.2" withSources (),
