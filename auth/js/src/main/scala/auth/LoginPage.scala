@@ -67,10 +67,6 @@ def LoginPage[ConnectionId: JsonEncoder](
             if (oauthProviders.nonEmpty) {
               <.div(
                 ^.className := "auth-oauth-section",
-                <.div(
-                  ^.className := "auth-oauth-divider",
-                  <.span("OR"),
-                ),
                 VdomArray(
                   oauthProviders.map { provider =>
                     OAuthButton(
@@ -80,6 +76,10 @@ def LoginPage[ConnectionId: JsonEncoder](
                       className = provider.className,
                     )
                   }*,
+                ),
+                <.div(
+                  ^.className := "auth-oauth-divider",
+                  <.span("OR"),
                 ),
               )
             } else EmptyVdom,
