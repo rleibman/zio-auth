@@ -47,5 +47,5 @@ case class OAuthProviderConfig(
   tokenUri:         String,
   userInfoUri:      String,
   redirectUri:      String,
-  scopes:           List[String]
+  scopes:           List[String],
 )

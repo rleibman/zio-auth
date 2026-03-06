@@ -36,7 +36,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
 
   def doLogin(
     email:    String,
-    password: String
+    password: String,
   ): ZIO[Scope & MockAuthEnvironment, AuthError, Response] = {
     for {
       app    <- zapp
@@ -45,8 +45,8 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
         .run(
           Request.post(
             path = config.loginUrl,
-            body = Body.fromString(s"""{"email":"$email","password":"$password"}""")
-          )
+            body = Body.fromString(s"""{"email":"$email","password":"$password"}"""),
+          ),
         ).catchAll {
           case Left(e)   => ZIO.fail(e)
           case Right(r1) => ZIO.succeed(r1)
@@ -63,7 +63,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
         } yield assertTrue(
           r1.status.isSuccess,
           r1.header(Header.Authorization).isDefined,
-          r1.header(Header.SetCookie).exists(a => a.value.name == config.refreshTokenName)
+          r1.header(Header.SetCookie).exists(a => a.value.name == config.refreshTokenName),
         )
       },
       test("bad login") {
@@ -77,7 +77,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           app <- zapp
           r2 <- app.run(
             Request
-              .post("api/changePassword", Body.fromString("newPasswordGoodUser2"))
+              .post("api/changePassword", Body.fromString("newPasswordGoodUser2")),
           )
         } yield assertTrue(r1.status.isSuccess, r2.status == Status.Unauthorized) // There's no token, unauthorized
       },
@@ -91,8 +91,8 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
             Request
               .post(
                 "api/changePassword",
-                Body.fromString("newPasswordGoodUser2")
-              ).addHeader(Header.Authorization.Bearer(token))
+                Body.fromString("newPasswordGoodUser2"),
+              ).addHeader(Header.Authorization.Bearer(token)),
           )
           r3 <- app.run(Request.get(config.logoutUrl).addHeader(Header.Authorization.Bearer(token)))
           r4 <- doLogin("goodUser2@example.com", "goodUser2")
@@ -102,7 +102,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r2.status.isSuccess,
           r3.status.isSuccess,
           r4.status == Status.Unauthorized, // Trying the original password should fail
-          r5.status.isSuccess
+          r5.status.isSuccess,
         )
       },
       test("whoami") {
@@ -114,13 +114,13 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r2 <- app.run(
             Request
               .get(config.whoAmIUrl)
-              .addHeader(Header.Authorization.Bearer(token))
+              .addHeader(Header.Authorization.Bearer(token)),
           )
           who <- r2.body.as[MockUser]
         } yield assertTrue(
           r1.status.isSuccess,
           r2.status.isSuccess,
-          who.email == "goodUser2@example.com"
+          who.email == "goodUser2@example.com",
         )
       },
       test("logout") {
@@ -134,7 +134,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
         } yield assertTrue(
           r1.status.isSuccess,
           r2.status.isSuccess,
-          r3.status == Status.Unauthorized // After logout, token should no longer be valid
+          r3.status == Status.Unauthorized, // After logout, token should no longer be valid
         )
       },
       test("requestPaswordRecovery and passwordRecovery, good user") {
@@ -144,7 +144,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           authServer <- ZIO
             .service[AuthServer[MockUser, MockUserId, MockConnectionId]].map(_.asInstanceOf[MockAuthServer])
           r1 <- app.run(
-            Request.post(config.requestPasswordRecoveryUrl, Body.fromString("""{"email":"goodUser3@example.com"}"""))
+            Request.post(config.requestPasswordRecoveryUrl, Body.fromString("""{"email":"goodUser3@example.com"}""")),
           )
           confirmUrlOpt <- authServer.confirmUrlForEmail("goodUser3@example.com")
           _             <- ZIO.fromOption(confirmUrlOpt).orElseFail(new Exception("No confirmation URL found"))
@@ -159,7 +159,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r1.status.isSuccess,
           fragment.startsWith(config.passwordRecoveryUrl.stripPrefix("/")), // Fragment doesn't have leading /
           r2.status.isSuccess,
-          r4.status.isSuccess
+          r4.status.isSuccess,
         )
       },
       test("requestPaswordRecovery and passwordRecovery, bad user") {
@@ -169,12 +169,12 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           authServer <- ZIO
             .service[AuthServer[MockUser, MockUserId, MockConnectionId]].map(_.asInstanceOf[MockAuthServer])
           r1 <- app.run(
-            Request.post(config.requestPasswordRecoveryUrl, Body.fromString("""{"email":"badUser@example.com"}"""))
+            Request.post(config.requestPasswordRecoveryUrl, Body.fromString("""{"email":"badUser@example.com"}""")),
           )
           confirmUrl <- authServer.confirmUrlForEmail("badUser@example.com")
         } yield assertTrue(
           r1.status.isSuccess,
-          confirmUrl.isEmpty
+          confirmUrl.isEmpty,
         )
       },
       test("requestRegistration and confirmRegistrationUrl: good user") {
@@ -185,7 +185,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           config <- ZIO.service[AuthConfig]
           app    <- zapp
           r1 <- app.run(
-            Request.post(config.requestRegistrationUrl, Body.fromString(requestString))
+            Request.post(config.requestRegistrationUrl, Body.fromString(requestString)),
           )
           confirmUrlOpt <- authServer.confirmUrlForEmail("newUser@example.com")
           _             <- ZIO.fromOption(confirmUrlOpt).orElseFail(new Exception("No confirmation URL found"))
@@ -197,7 +197,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
         } yield assertTrue(
           r1.status.isSuccess,
           fragment.startsWith(config.confirmRegistrationUrl.stripPrefix("/")), // Fragment doesn't have leading /
-          r2.status.isSuccess
+          r2.status.isSuccess,
         )
       },
       test("requestRegistration and confirmRegistrationUrl, existing email") {
@@ -207,7 +207,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           app    <- zapp
           r1     <- app.run(Request.post(config.requestRegistrationUrl, Body.fromString(requestString)))
         } yield assertTrue(
-          r1.status == Status.Conflict
+          r1.status == Status.Conflict,
         )
       },
       test("requestRegistration and confirmRegistrationUrl, Invalid request") {
@@ -217,7 +217,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           app    <- zapp
           r1     <- app.run(Request.post(config.requestRegistrationUrl, Body.fromString(requestString)))
         } yield assertTrue(
-          r1.status == Status.BadRequest
+          r1.status == Status.BadRequest,
         )
       },
       test("clientAuthConfig") {
@@ -231,7 +231,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           clientConfig.loginUrl == config.loginUrl,
           clientConfig.logoutUrl == config.logoutUrl,
           clientConfig.refreshUrl == config.refreshUrl,
-          clientConfig.whoAmIUrl == config.whoAmIUrl
+          clientConfig.whoAmIUrl == config.whoAmIUrl,
         )
       },
       test("Non existent file") {
@@ -240,11 +240,11 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           token = r1.header(Header.Authorization).get.renderedValue.stripPrefix("Bearer ")
           app <- zapp
           r2 <- app.run(
-            Request.get("api/doesntExist").addHeader(Header.Authorization.Bearer(token))
+            Request.get("api/doesntExist").addHeader(Header.Authorization.Bearer(token)),
           )
         } yield assertTrue(
           r1.status.isSuccess,
-          r2.status == NotFound
+          r2.status == NotFound,
         )
       },
       test("secured api, good token") {
@@ -253,21 +253,21 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           token = r1.header(Header.Authorization).get.renderedValue.stripPrefix("Bearer ")
           app <- zapp
           r2 <- app.run(
-            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
+            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token)),
           )
         } yield assertTrue(
           r1.status.isSuccess,
-          r2.status.isSuccess
+          r2.status.isSuccess,
         )
       },
       test("secured api, bad token") {
         for {
           app <- zapp
           r1 <- app.run(
-            Request.get("api/secured").addHeader(Header.Authorization.Bearer("invalidToken"))
+            Request.get("api/secured").addHeader(Header.Authorization.Bearer("invalidToken")),
           )
         } yield assertTrue(
-          r1.status == Status.Unauthorized
+          r1.status == Status.Unauthorized,
         )
       },
       test("secured api, expired token") {
@@ -278,11 +278,11 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           config <- ZIO.service[AuthConfig]
           _      <- TestClock.adjust(config.accessTTL.plus(5.seconds)) // Simulate token expiration
           r2 <- app.run(
-            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
+            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token)),
           )
         } yield assertTrue(
           r1.status.isSuccess,
-          r2.status == Status.Unauthorized // Should redirect to refresh URL
+          r2.status == Status.Unauthorized, // Should redirect to refresh URL
         )
       },
       test("refresh token") {
@@ -292,18 +292,18 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           token = r1.header(Header.Authorization).get.renderedValue.stripPrefix("Bearer ")
           app <- zapp
           r2 <- app.run(
-            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
+            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token)),
           )
           _ <- TestClock.adjust(config.accessTTL.plus(5.seconds)) // Simulate token expiration
           r3 <- app.run(
-            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
+            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token)),
           )
           refreshCookie = r1.header(Header.SetCookie).map(_.value.content)
           r4 <- app.run(
             Request
               .get(config.refreshUrl)
               .addHeader(Header.Authorization.Bearer(token))
-              .addCookie(Cookie.Request(config.refreshTokenName, refreshCookie.getOrElse("")))
+              .addCookie(Cookie.Request(config.refreshTokenName, refreshCookie.getOrElse(""))),
           )
           token_expired <- r3.body.asString
         } yield assertTrue(
@@ -311,7 +311,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r2.status.isSuccess,
           r3.status == Status.Unauthorized,
           token_expired == "token_expired",
-          r4.status.isSuccess
+          r4.status.isSuccess,
         )
       },
       test("refresh token, expired refresh token") {
@@ -321,18 +321,18 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           token = r1.header(Header.Authorization).get.renderedValue.stripPrefix("Bearer ")
           app <- zapp
           r2 <- app.run(
-            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
+            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token)),
           )
           _ <- TestClock.adjust(config.refreshTTL.plus(5.seconds)) // Simulate refresh expiration
           r3 <- app.run(
-            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token))
+            Request.get("api/secured").addHeader(Header.Authorization.Bearer(token)),
           )
           refreshCookie = r1.header(Header.SetCookie).map(_.value.content)
           r4 <- app.run(
             Request
               .get(config.refreshUrl)
               .addHeader(Header.Authorization.Bearer(token))
-              .addCookie(Cookie.Request(config.refreshTokenName, refreshCookie.getOrElse("")))
+              .addCookie(Cookie.Request(config.refreshTokenName, refreshCookie.getOrElse(""))),
           )
           token_expired <- r3.body.asString
         } yield assertTrue(
@@ -340,7 +340,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r2.status.isSuccess,
           r3.status == Status.Unauthorized,
           token_expired == "token_expired",
-          r4.status == Status.Unauthorized
+          r4.status == Status.Unauthorized,
         )
       },
       test("concurrent login") {
@@ -358,7 +358,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           r2.status.isSuccess,
           r3.status.isSuccess,
           r4.status.isSuccess,
-          token1 != token2 // Ensure tokens are unique for each session
+          token1 != token2, // Ensure tokens are unique for each session
         )
       },
       test("session termination on password change") {
@@ -384,7 +384,7 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
 //          r4.status == Status.Unauthorized, // Old token should no longer work
 //          r5.status.isSuccess
 //        )
-      }
+      },
     )
 
 }

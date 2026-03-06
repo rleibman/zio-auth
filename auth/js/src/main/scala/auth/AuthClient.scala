@@ -50,7 +50,7 @@ object AuthClient {
 
   private val backend: WebSocketBackend[Future] = FetchBackend(
     // This is necessary so that cookies are sent with the request, including httpOnly cookies
-    fetchOptions = FetchOptions(credentials = Some(RequestCredentials.include), mode = None)
+    fetchOptions = FetchOptions(credentials = Some(RequestCredentials.include), mode = None),
   )
 
   import scala.scalajs.concurrent.JSExecutionContext.Implicits.queue
@@ -58,7 +58,7 @@ object AuthClient {
   def login[UserType: JsonDecoder, ConnectionId: JsonEncoder](
     email:        String,
     password:     String,
-    connectionId: Option[ConnectionId]
+    connectionId: Option[ConnectionId],
   ): AsyncCallback[Either[String, UserType]] = {
     AsyncCallback
       .fromFuture(
@@ -68,8 +68,8 @@ object AuthClient {
             s"""{"email": "$email", "password": "$password", "connectionId": ${connectionId
                 .map(
                   _.toJsonAST
-                    .fold(_ => "null", _.toJson)
-                ).getOrElse("null")}}"""
+                    .fold(_ => "null", _.toJson),
+                ).getOrElse("null")}}""",
           )
           .response(asJson[UserType])
           .send(backend)
@@ -89,8 +89,8 @@ object AuthClient {
                 Left(s"Invalid email or password, sorry, try again.")
               case Left(err) =>
                 Left(s"Unexpected error: ${response.code}: ${err.getMessage}")
-            }
-          )
+            },
+          ),
       ).flatTap {
         case Left(err)   => Callback.log(s"Login failed: $err").asAsyncCallback
         case Right(user) => Callback.log(s"Login succeeded: $user").asAsyncCallback
@@ -104,7 +104,7 @@ object AuthClient {
         response <- AsyncCallback.fromFuture(
           basicRequest
             .get(uri"/logout")
-            .send(backend)
+            .send(backend),
         )
         _ <- Callback.log(s"Logout endpoint response: ${response.code}").asAsyncCallback
         _ <- Callback.log("Removing token from localStorage").asAsyncCallback
@@ -125,7 +125,7 @@ object AuthClient {
         .body(asJson(request))
         .response(asString)
         .send(backend)
-        .map(_.body.map(_ => ()))
+        .map(_.body.map(_ => ())),
     )
 
   def confirmRegistration(confirmationCode: String): AsyncCallback[Either[String, Unit]] = {
@@ -135,7 +135,7 @@ object AuthClient {
         .body(asJson(confirmationCode))
         .response(asString)
         .send(backend)
-        .map(_.body.map(_ => ()))
+        .map(_.body.map(_ => ())),
     )
   }
 
@@ -145,7 +145,7 @@ object AuthClient {
       basicRequest
         .get(uri"/api/whoami")
         .connectionId(connectionId),
-      _ => AsyncCallback.unit // Do nothing with the error
+      _ => AsyncCallback.unit, // Do nothing with the error
     ).map(_.toOption)
   }
 
@@ -155,12 +155,12 @@ object AuthClient {
         .get(uri"/api/clientAuthConfig")
         .response(asJsonOrFail[ClientAuthConfig])
         .send(backend)
-        .map(_.body)
+        .map(_.body),
     )
   }
 
   def requestRegistration(
-    request: UserRegistrationRequest
+    request: UserRegistrationRequest,
   ): AsyncCallback[Either[String, String]] = {
     AsyncCallback.fromFuture(
       basicRequest
@@ -168,12 +168,12 @@ object AuthClient {
         .body(asJson(request))
         .response(asString)
         .send(backend)
-        .map(_.body)
+        .map(_.body),
     )
   }
 
   def passwordRecovery(
-    request: PasswordRecoveryNewPasswordRequest
+    request: PasswordRecoveryNewPasswordRequest,
   ): AsyncCallback[Either[String, String]] = {
     AsyncCallback.fromFuture(
       basicRequest
@@ -181,7 +181,7 @@ object AuthClient {
         .body(asJson(request))
         .response(asString)
         .send(backend)
-        .map(_.body)
+        .map(_.body),
     )
   }
 
@@ -196,7 +196,7 @@ object AuthClient {
       AsyncCallback.pure {
         window.alert(msg)
         window.location.reload()
-      }
+      },
   ): AsyncCallback[Either[String, A]] = {
     def doCall(tok: String): AsyncCallback[Response[Either[String, A]]] = {
       AsyncCallback.fromFuture(
@@ -207,7 +207,7 @@ object AuthClient {
           .mapResponse { e =>
             e.left.map(_.getMessage)
           }
-          .send(backend)
+          .send(backend),
       )
     }
 
@@ -218,7 +218,7 @@ object AuthClient {
             basicRequest
               .get(uri"/refresh")
               .response(asString)
-              .send(backend)
+              .send(backend),
           )
           _ <- Callback.log(s"Refresh response code: ${refreshResponse.code}").asAsyncCallback
           retried <- refreshResponse.code match {

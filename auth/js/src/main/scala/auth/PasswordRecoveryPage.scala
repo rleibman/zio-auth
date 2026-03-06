@@ -41,7 +41,7 @@ val PasswordRecoveryPage = ScalaFnComponent
       config,
       _, // state,
       _, // repeatPassword
-      _ // error
+      _, // error
     ) =>
       AuthClient
         .clientAuthConfig()
@@ -54,7 +54,7 @@ val PasswordRecoveryPage = ScalaFnComponent
       config,
       state,
       repeatPassword,
-      error
+      error,
     ) =>
       <.div(
         <.h1("Reset Your Password"),
@@ -67,7 +67,7 @@ val PasswordRecoveryPage = ScalaFnComponent
                 PasswordRecoveryNewPasswordRequest.validateRequest(
                   state.value.confirmationCode,
                   state.value.password,
-                  repeatPassword.value
+                  repeatPassword.value,
                 )
 
               e.preventDefaultCB >> (validated match {
@@ -76,8 +76,8 @@ val PasswordRecoveryPage = ScalaFnComponent
                     .passwordRecovery(a).map(r =>
                       r.fold(
                         e => error.modState(_ => Some(s"Error setting password: $e")),
-                        _ => props._2.set(LoginPages.Login)
-                      )
+                        _ => props._2.set(LoginPages.Login),
+                      ),
                     ).completeWith(_.get)
                 case Validated.Invalid(errors) =>
                   error.modState(_ => Some(errors.toList.mkString(", ")))
@@ -90,8 +90,8 @@ val PasswordRecoveryPage = ScalaFnComponent
                 ^.name        := "password",
                 ^.placeholder := "••••••••",
                 ^.`type`      := "password",
-                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
-              )
+                ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) },
+              ),
             ),
             <.div(
               <.label("Repeat Password", ^.`for` := "repeatPassword"),
@@ -99,11 +99,11 @@ val PasswordRecoveryPage = ScalaFnComponent
                 ^.name        := "repeatPassword",
                 ^.placeholder := "••••••••",
                 ^.`type`      := "password",
-                ^.onChange ==> { (e: ReactEventFromInput) => repeatPassword.modState(_ => e.target.value) }
-              )
+                ^.onChange ==> { (e: ReactEventFromInput) => repeatPassword.modState(_ => e.target.value) },
+              ),
             ),
             <.div(<.button(^.`type` := "submit", "Reset Password")),
-            <.div(error.value.fold(EmptyVdom)(e => <.div(^.className := "error", e)))
+            <.div(error.value.fold(EmptyVdom)(e => <.div(^.className := "error", e))),
           ),
           <.div(
             ^.className := "other-instructions",
@@ -112,9 +112,9 @@ val PasswordRecoveryPage = ScalaFnComponent
               ^.marginLeft := 5.px,
               "Sign In",
               ^.href := config.value.loginUrl,
-              ^.onClick ==> { e => e.preventDefaultCB >> props._2.set(LoginPages.Login) }
-            )
-          )
-        )
-      )
+              ^.onClick ==> { e => e.preventDefaultCB >> props._2.set(LoginPages.Login) },
+            ),
+          ),
+        ),
+      ),
   )

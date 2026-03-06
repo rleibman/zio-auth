@@ -25,7 +25,7 @@ object Session {
 
   def apply[UserType, ConnectionId](
     user:         UserType,
-    connectionId: Option[ConnectionId]
+    connectionId: Option[ConnectionId],
   ): Session[UserType, ConnectionId] = {
     AuthenticatedSession(Some(user), connectionId)
   }
@@ -40,7 +40,7 @@ sealed abstract class Session[UserType, ConnectionId] {
 }
 case class AuthenticatedSession[UserType, ConnectionId](
   user:         Some[UserType],
-  connectionId: Option[ConnectionId] = None
+  connectionId: Option[ConnectionId] = None,
 ) extends Session[UserType, ConnectionId]
 case class UnauthenticatedSession[UserType, ConnectionId](connectionId: Option[ConnectionId] = None)
     extends Session[UserType, ConnectionId] {

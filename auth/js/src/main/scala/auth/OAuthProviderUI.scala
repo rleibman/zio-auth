@@ -38,5 +38,5 @@ case class OAuthProviderUI(
   provider:  String,
   icon:      Option[VdomNode] = None,
   label:     String,
-  className: Option[String] = None
+  className: Option[String] = None,
 )

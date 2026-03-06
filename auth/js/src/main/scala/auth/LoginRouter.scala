@@ -48,15 +48,15 @@ object LoginRouter {
   private def layout[ConnectionId: JsonEncoder](
     page:         RouterCtl[LoginPages],
     resolution:   ResolutionWithProps[LoginPages, Option[ConnectionId]],
-    connectionId: Option[ConnectionId]
+    connectionId: Option[ConnectionId],
   ): VdomElement = {
     <.div(^.className := "auth")(
-      resolution.renderP(connectionId)
+      resolution.renderP(connectionId),
     )
   }
 
   private def config[ConnectionId: JsonEncoder](
-    oauthProviders: List[OAuthProviderUI]
+    oauthProviders: List[OAuthProviderUI],
   ): RouterWithPropsConfig[LoginPages, Option[ConnectionId]] =
     RouterWithPropsConfigDsl[LoginPages, Option[ConnectionId]].buildConfig { dsl =>
       {
@@ -69,46 +69,46 @@ object LoginRouter {
             staticRoute("#login", LoginPages.Login) ~> renderRP(
               (
                 ctl,
-                connectionId
-              ) => LoginPage(oauthProviders)(ctl, connectionId)
+                connectionId,
+              ) => LoginPage(oauthProviders)(ctl, connectionId),
             ) |
             staticRoute("#requestLostPassword", LoginPages.RequestLostPassword) ~> renderR(ctl =>
-              RequestLostPasswordPage(ctl)
+              RequestLostPasswordPage(ctl),
             ) |
             dynamicRouteCT(
               ("#passwordRecovery" ~ queryToMap.pmap(map => map.get("code"))(code => Map("code" -> code)))
-                .caseClass[PasswordRecovery]
+                .caseClass[PasswordRecovery],
             ) ~> dynRenderR(
               (
                 p,
-                ctl
-              ) => PasswordRecoveryPage(p.code, ctl)
+                ctl,
+              ) => PasswordRecoveryPage(p.code, ctl),
             ) |
             staticRoute("#requestRegistration", RequestRegistration) ~> renderR(ctl => RequestRegistrationPage(ctl)) |
             dynamicRouteCT(
               ("#confirmRegistration" ~ queryToMap.pmap(map => map.get("code"))(code => Map("code" -> code)))
-                .caseClass[ConfirmRegistration]
+                .caseClass[ConfirmRegistration],
             ) ~> dynRenderR(
               (
                 p,
-                ctl
-              ) => ConfirmRegistrationPage(p.code, ctl)
+                ctl,
+              ) => ConfirmRegistrationPage(p.code, ctl),
             )
         )
           .notFound(
-            redirectToPage(LoginPages.Login)(using SetRouteVia.HistoryReplace)
+            redirectToPage(LoginPages.Login)(using SetRouteVia.HistoryReplace),
           )
       }.renderWithP(
         (
           ctl,
-          resolution
-        ) => connectionId => layout(ctl, resolution, connectionId)
+          resolution,
+        ) => connectionId => layout(ctl, resolution, connectionId),
       )
     }
 
   def apply[ConnectionId: JsonEncoder](
     connectionId:   Option[ConnectionId],
-    oauthProviders: List[OAuthProviderUI] = List.empty
+    oauthProviders: List[OAuthProviderUI] = List.empty,
   ) = RouterWithProps(BaseUrl.fromWindowOrigin_/, config(oauthProviders))(connectionId)
 
 }

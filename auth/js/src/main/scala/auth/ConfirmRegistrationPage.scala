@@ -31,7 +31,7 @@ val ConfirmRegistrationPage = ScalaFnComponent
   .useEffectOnMountBy {
     (
       props,
-      error
+      error,
     ) =>
       AuthClient
         .confirmRegistration(props._1)
@@ -46,7 +46,7 @@ val ConfirmRegistrationPage = ScalaFnComponent
   .render(
     (
       props,
-      error
+      error,
     ) =>
       <.div(
         <.h1("Account Activation"),
@@ -64,12 +64,12 @@ val ConfirmRegistrationPage = ScalaFnComponent
                   <.a(
                     ^.href := "login",
                     ^.onClick ==> { e => e.preventDefaultCB >> props._2.set(LoginPages.Login) },
-                    "Log in."
-                  )
-                )
+                    "Log in.",
+                  ),
+                ),
               )
-            }(e => VdomArray(<.h2(^.key := "c", "Account Creation Failed"), <.div(^.key := "d", e)))
-          )
-        )
-      )
+            }(e => VdomArray(<.h2(^.key := "c", "Account Creation Failed"), <.div(^.key := "d", e))),
+          ),
+        ),
+      ),
   )

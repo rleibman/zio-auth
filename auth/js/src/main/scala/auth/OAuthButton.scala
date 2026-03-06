@@ -43,7 +43,7 @@ case class OAuthButtonProps(
   provider:  String,
   icon:      Option[VdomNode] = None,
   label:     String,
-  className: Option[String] = None
+  className: Option[String] = None,
 )
 
 object OAuthButton {
@@ -53,7 +53,7 @@ object OAuthButton {
       ^.href      := s"/oauth/${props.provider}/login",
       ^.className := props.className.getOrElse("auth-oauth-button"),
       props.icon.whenDefined,
-      <.span(props.label)
+      <.span(props.label),
     )
   }
 
@@ -61,7 +61,7 @@ object OAuthButton {
     provider:  String,
     icon:      Option[VdomNode] = None,
     label:     String,
-    className: Option[String] = None
+    className: Option[String] = None,
   ): VdomElement = component(OAuthButtonProps(provider, icon, label, className))
 
 }

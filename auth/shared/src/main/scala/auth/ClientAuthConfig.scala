@@ -29,7 +29,7 @@ case class ClientAuthConfig(
   loginUrl:                   String = "",
   logoutUrl:                  String = "",
   refreshUrl:                 String = "",
-  whoAmIUrl:                  String = ""
+  whoAmIUrl:                  String = "",
 )
 
 given JsonCodec[ClientAuthConfig] = JsonCodec.derived

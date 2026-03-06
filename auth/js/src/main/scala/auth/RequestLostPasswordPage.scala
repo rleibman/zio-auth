@@ -28,7 +28,7 @@ import japgolly.scalajs.react.{CtorType, *}
 
 case class RequestLostPasswordState(
   email: String = "",
-  error: Option[String] = None
+  error: Option[String] = None,
 )
 
 val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = ScalaFnComponent
@@ -41,7 +41,7 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
       _,
       config,
       _, // state
-      _
+      _,
     ) =>
       AuthClient
         .clientAuthConfig()
@@ -53,7 +53,7 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
       ctl,
       config,
       state,
-      sent
+      sent,
     ) =>
       <.div(
         <.h1("Reset Your Password"),
@@ -74,8 +74,8 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                 <.h2(^.key := "a", "Reset link sent"),
                 <.div(
                   ^.key := "b",
-                  s"Please check your email ${state.value.email} for instructions to reset your password. Make sure you check your SPAM folder!!!"
-                )
+                  s"Please check your email ${state.value.email} for instructions to reset your password. Make sure you check your SPAM folder!!!",
+                ),
               )
             } else {
               VdomArray(
@@ -87,13 +87,13 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                     ^.placeholder := "wizard@example.com",
                     ^.required    := true,
                     ^.`type`      := "email",
-                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
-                  )
+                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) },
+                  ),
                 ),
                 <.div(^.key := "d", <.button(^.`type` := "submit", "Request Password Reset")),
-                state.value.error.fold(EmptyVdom)(e => <.div(^.key := "e", ^.className := "error", e))
+                state.value.error.fold(EmptyVdom)(e => <.div(^.key := "e", ^.className := "error", e)),
               )
-            }
+            },
           ),
           <.div(
             ^.className := "other-instructions",
@@ -102,9 +102,9 @@ val RequestLostPasswordPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
               ^.marginLeft := 5.px,
               "Sign In",
               ^.href := config.value.loginUrl,
-              ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.Login) }
-            )
-          )
-        )
-      )
+              ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.Login) },
+            ),
+          ),
+        ),
+      ),
   )

@@ -35,30 +35,30 @@ object AuthError {
 
   def apply(
     message: String,
-    cause:   Throwable
+    cause:   Throwable,
   ): AuthError = new AuthError(message, cause)
 
 }
 
 sealed class AuthError(
   message: String,
-  cause:   Throwable
+  cause:   Throwable,
 ) extends Error(message, cause)
 
 case class ExpiredToken(
   message: String,
-  cause:   Throwable
+  cause:   Throwable,
 ) extends AuthError(message, cause)
 
 import scala.language.unsafeNulls
 
 case class AuthBadRequest(
   message: String,
-  cause:   Option[Throwable] = None
+  cause:   Option[Throwable] = None,
 ) extends AuthError(message, cause.orNull)
 case class InvalidToken(
   message: String,
-  cause:   Option[Throwable] = None
+  cause:   Option[Throwable] = None,
 ) extends AuthError(message, cause.orNull)
 case class EmailAlreadyExists(message: String) extends AuthError(message, null)
 case class FileNotFound(message: String) extends AuthError(message, null)

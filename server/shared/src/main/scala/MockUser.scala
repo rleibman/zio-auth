@@ -27,7 +27,7 @@ case class MockUser(
   userId:   MockUserId,
   name:     String,
   email:    String,
-  password: String
+  password: String,
 )
 
 object MockUser {

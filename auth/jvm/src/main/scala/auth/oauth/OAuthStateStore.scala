@@ -43,7 +43,7 @@ trait OAuthStateStore {
   def put(
     state:     String,
     timestamp: LocalDateTime,
-    provider:  String
+    provider:  String,
   ): UIO[Unit]
 
   /** Retrieve and remove a state token
@@ -69,13 +69,13 @@ object OAuthStateStore {
   /** Live implementation using a concurrent TrieMap
     */
   final case class Live(
-    store: Ref[Map[String, (LocalDateTime, String)]]
+    store: Ref[Map[String, (LocalDateTime, String)]],
   ) extends OAuthStateStore {
 
     override def put(
       state:     String,
       timestamp: LocalDateTime,
-      provider:  String
+      provider:  String,
     ): UIO[Unit] = store.update(_ + (state -> (timestamp, provider)))
 
     override def remove(state: String): UIO[Option[(LocalDateTime, String)]] =
@@ -104,7 +104,7 @@ object OAuthStateStore {
     */
   def live(
     cleanupIntervalMinutes: Int = 5,
-    expirationMinutes:      Int = 10
+    expirationMinutes:      Int = 10,
   ): ZLayer[Any, Nothing, OAuthStateStore] =
     ZLayer.scoped {
       for {

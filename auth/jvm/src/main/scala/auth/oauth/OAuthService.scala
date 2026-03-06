@@ -73,13 +73,13 @@ object OAuthService {
   def live(
     googleConfig:  Option[OAuthProviderConfig] = None,
     githubConfig:  Option[OAuthProviderConfig] = None,
-    discordConfig: Option[OAuthProviderConfig] = None
+    discordConfig: Option[OAuthProviderConfig] = None,
   ): ULayer[OAuthService] =
     ZLayer.succeed {
       new OAuthService {
 
         private val providers: Map[String, OAuthProvider] = List(
-          googleConfig.map(config => "google" -> new GoogleOAuthProvider(config))
+          googleConfig.map(config => "google" -> new GoogleOAuthProvider(config)),
           // NOTE: GitHub and Discord providers not yet implemented
           // Uncomment when providers are added:
           // githubConfig.map(config => "github" -> new GitHubOAuthProvider(config)),
@@ -91,8 +91,8 @@ object OAuthService {
             .fromOption(providers.get(name.toLowerCase))
             .orElseFail(
               AuthError(
-                s"OAuth provider '$name' not found or not configured. Available providers: ${providers.keys.mkString(", ")}"
-              )
+                s"OAuth provider '$name' not found or not configured. Available providers: ${providers.keys.mkString(", ")}",
+              ),
             )
 
         override def generateState(): UIO[String] = Random.nextUUID.map(_.toString.replace("-", ""))

@@ -39,12 +39,12 @@ object TestServer extends ZIOApp {
   def testAuthRoutes: ZIO[Any, AuthError, Routes[Session[MockUser, MockConnectionId], AuthError]] =
     ZIO.succeed(
       Routes(
-        Method.GET / "api" / "secured" -> handler((_: Request) => Response.json("Got a secured resource!".toJson))
-      )
+        Method.GET / "api" / "secured" -> handler((_: Request) => Response.json("Got a secured resource!".toJson)),
+      ),
     )
 
   private def file(
-    fileName: String
+    fileName: String,
   ): IO[FileNotFound, File] = {
     JPaths.get(fileName) match {
       case path: java.nio.file.Path if !Files.exists(path) => ZIO.fail(FileNotFound(fileName))
@@ -67,15 +67,15 @@ object TestServer extends ZIOApp {
           handler {
             (
               path: Path,
-              _:    Request
+              _:    Request,
             ) =>
               file(s"$staticContentDir/${path.toString}")
                 .map(f => Handler.fromFile(f).mapError(AuthError(_)))
                 .catchAll { e =>
                   ZIO.succeed(Handler.succeed(Response.notFound(e.getMessage)))
                 }.map(_.contramap[(Path, Request)](_._2))
-          }.flatten
-      )
+          }.flatten,
+      ),
     )
 
   val zapp = for {
@@ -105,11 +105,11 @@ object TestServer extends ZIOApp {
         .provide(
           Server.live,
           ZLayer.succeed(Server.Config.default.binding("localhost", 8081)),
-          ZLayer.succeed(AuthConfig(secretKey = SecretKey("MOCK_SECRET_KEY")))
+          ZLayer.succeed(AuthConfig(secretKey = SecretKey("MOCK_SECRET_KEY"))),
         )
         .foldCauseZIO(
           cause => ZIO.logErrorCause("err when booting server", cause),
-          _ => ZIO.logError("app quit unexpectedly...")
+          _ => ZIO.logError("app quit unexpectedly..."),
         )
     } yield server
 

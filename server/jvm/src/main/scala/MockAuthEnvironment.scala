@@ -31,7 +31,7 @@ object MockAuthEnvironment {
   case class MockAuthServer(
     users:         Ref[Map[MockUserId, MockUser]],
     emails:        Ref[Map[String, String]],
-    invalidTokens: Ref[Set[String]]
+    invalidTokens: Ref[Set[String]],
   ) extends AuthServer[MockUser, MockUserId, MockConnectionId] {
 
     override def getPK(user: MockUser): MockUserId = user.userId
@@ -39,7 +39,7 @@ object MockAuthEnvironment {
     override def login(
       loginName:    String,
       password:     String,
-      connectionId: Option[MockConnectionId]
+      connectionId: Option[MockConnectionId],
     ): ZIO[Any, AuthError, Option[MockUser]] =
       users.get.map(_.values.find(u => u.email == loginName && u.password == password))
 
@@ -48,7 +48,7 @@ object MockAuthEnvironment {
 
     override def changePassword(
       userPK:      MockUserId,
-      newPassword: String
+      newPassword: String,
     ): ZIO[Any, AuthError, Unit] =
       users.update { map =>
         val modedUser = map
@@ -66,14 +66,14 @@ object MockAuthEnvironment {
     override def createUser(
       name:     String,
       email:    String,
-      password: String
+      password: String,
     ): IO[AuthError, MockUser] = {
       users.modify { map =>
         val newUser = MockUser(
           userId = MockUserId(map.size),
           name = name,
           email = email,
-          password = password
+          password = password,
         )
 
         (newUser, map + (MockUserId(map.size) -> newUser))
@@ -81,7 +81,7 @@ object MockAuthEnvironment {
     }
 
     def extractLink(
-      emailBody: String
+      emailBody: String,
     ): String = {
       val regex = "<a[^>]*>(.*?)</a>".r
 
@@ -95,11 +95,11 @@ object MockAuthEnvironment {
     override def sendEmail(
       subject:   String,
       emailBody: String,
-      user:      MockUser
+      user:      MockUser,
     ): IO[AuthError, Unit] = {
       val confirmUrl = extractLink(emailBody)
       emails.update(_ + (user.email -> confirmUrl)) *> ZIO.logInfo(
-        s"Sending email to ${user.email} with subject $subject and body $emailBody"
+        s"Sending email to ${user.email} with subject $subject and body $emailBody",
       )
     }
 
@@ -127,30 +127,30 @@ object MockAuthEnvironment {
                   userId = MockUserId(1),
                   password = "goodUser1",
                   name = "Good User 1",
-                  email = "goodUser1@example.com"
+                  email = "goodUser1@example.com",
                 ),
                 MockUserId(2) -> MockUser(
                   userId = MockUserId(2),
                   password = "goodUser2",
                   name = "Good User 2",
-                  email = "goodUser2@example.com"
+                  email = "goodUser2@example.com",
                 ),
                 MockUserId(3) -> MockUser(
                   userId = MockUserId(3),
                   password = "goodUser3",
                   name = "Good User 3",
-                  email = "goodUser3@example.com"
-                )
-              )
+                  email = "goodUser3@example.com",
+                ),
+              ),
             )
           confirmationEmails <- Ref.make(Map.empty[String, String])
           invalidTokens      <- Ref.make(Set.empty[String])
         } yield MockAuthServer(users, confirmationEmails, invalidTokens): AuthServer[
           MockUser,
           MockUserId,
-          MockConnectionId
-        ]
-      )
+          MockConnectionId,
+        ],
+      ),
     )
 
 }

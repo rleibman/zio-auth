@@ -39,16 +39,16 @@ object AuthTestApp {
       .useEffectOnMountBy {
         (
           _,
-          user
+          user,
         ) =>
           AuthClient
             .whoami[MockUser, MockConnectionId](Some(MockConnectionId("hello"))).map(j =>
-              user.modState(_ => j)
+              user.modState(_ => j),
             ).completeWith(_.get)
       }
       .render($ =>
         $.hook1.value.fold(
-          <.div(LoginRouter(Some(MockConnectionId("hello"))))
+          <.div(LoginRouter(Some(MockConnectionId("hello")))),
         )(user =>
           <.div(
             <.h1("Welcome"),
@@ -61,17 +61,17 @@ object AuthTestApp {
                   .map(s => Callback.alert(s.fold(error => s"Error: $error", s => s)))
                   .completeWith(_.get)
               },
-              "Secured content"
+              "Secured content",
             ),
             <.button(
               ^.onClick --> AuthClient
                 .logout()
                 .map(_ => $.hook1.modState(_ => None))
                 .completeWith(_ => $.hook1.modState(_ => None)),
-              "Logout"
-            )
-          )
-        )
+              "Logout",
+            ),
+          ),
+        ),
       )
 
     js.Dynamic.global.document.title =

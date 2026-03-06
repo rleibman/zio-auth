@@ -11,7 +11,7 @@ enablePlugins(
   GitVersioning
 )
 
-lazy val SCALA = "3.8.1"
+lazy val SCALA = "3.8.2"
 Global / onChangedBuildSource                     := ReloadOnSourceChanges
 scalaVersion                                      := SCALA
 Global / scalaVersion                             := SCALA
@@ -20,12 +20,12 @@ import scala.concurrent.duration.*
 Global / watchAntiEntropy := 1.second
 
 val zioConfigVersion = "4.0.6"
-val zioHttpVersion = "3.8.1"
+val zioHttpVersion = "3.9.0"
 val zioJsonVersion = "0.9.0"
 val zioVersion = "2.1.24"
 val scalajsReactVersion = "3.0.0"
 val reactVersion = "^18.3.0"
-val sttpVersion = "4.0.18"
+val sttpVersion = "4.0.19"
 
 lazy val scala3Opts = Seq(
   "-deprecation", // Emit warning and location for usages of deprecated APIs.

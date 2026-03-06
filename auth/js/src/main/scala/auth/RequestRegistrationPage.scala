@@ -43,7 +43,7 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
       _, // Request
       _, // Repeat password
       _, // sent
-      _ // error
+      _, // error
     ) =>
       AuthClient
         .clientAuthConfig()
@@ -57,7 +57,7 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
       state,
       repeatPassword,
       sent,
-      error
+      error,
     ) =>
       <.div(
         <.h1("Create your account"),
@@ -71,7 +71,7 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                   state.value.name,
                   state.value.email,
                   state.value.password,
-                  repeatPassword.value
+                  repeatPassword.value,
                 )
 
               e.preventDefaultCB >> (validated match {
@@ -82,9 +82,9 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                         e => error.modState(_ => Some(s"Error requesting registration: $e")),
                         _ =>
                           error.modState(_ =>
-                            Some("Account created successfully, please await for an email to confirm registration. Make sure you check your SPAM folder!!!")
-                          ) >> sent.modState(_ => true)
-                      )
+                            Some("Account created successfully, please await for an email to confirm registration. Make sure you check your SPAM folder!!!"),
+                          ) >> sent.modState(_ => true),
+                      ),
                     ).completeWith(_.get)
                 case Validated.Invalid(errors) =>
                   error.modState(_ => Some(errors.toList.mkString(", ")))
@@ -96,8 +96,8 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                 <.h2(^.key := "a", "Account Creation Submitted"),
                 <.div(
                   ^.key := "b",
-                  s"Please check your email ${state.value.email} for instructions to validate your account creation. Make sure you check your SPAM folder!!!"
-                )
+                  s"Please check your email ${state.value.email} for instructions to validate your account creation. Make sure you check your SPAM folder!!!",
+                ),
               )
             } else {
               VdomArray(
@@ -109,8 +109,8 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                     ^.placeholder := "MightyDM",
                     ^.required    := true,
                     ^.`type`      := "text",
-                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(name = e.target.value)) }
-                  )
+                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(name = e.target.value)) },
+                  ),
                 ),
                 <.div(
                   ^.key := "d",
@@ -120,8 +120,8 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                     ^.placeholder := "wizard@example.com",
                     ^.required    := true,
                     ^.`type`      := "email",
-                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
-                  )
+                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) },
+                  ),
                 ),
                 <.div(
                   ^.key := "e",
@@ -130,8 +130,8 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                     ^.name        := "password",
                     ^.placeholder := "••••••••",
                     ^.`type`      := "password",
-                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
-                  )
+                    ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) },
+                  ),
                 ),
                 <.div(
                   ^.key := "f",
@@ -140,13 +140,13 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
                     ^.name        := "repeatPassword",
                     ^.placeholder := "••••••••",
                     ^.`type`      := "password",
-                    ^.onChange ==> { (e: ReactEventFromInput) => repeatPassword.modState(_ => e.target.value) }
-                  )
+                    ^.onChange ==> { (e: ReactEventFromInput) => repeatPassword.modState(_ => e.target.value) },
+                  ),
                 ),
                 <.div(^.key := "g", <.button(^.`type` := "submit", "Register")),
-                <.div(^.key := "h", error.value.fold(EmptyVdom)(e => <.div(^.className := "error", e)))
+                <.div(^.key := "h", error.value.fold(EmptyVdom)(e => <.div(^.className := "error", e))),
               )
-            }
+            },
           ),
           <.div(
             ^.className := "other-instructions",
@@ -155,9 +155,9 @@ val RequestRegistrationPage: Component[RouterCtl[LoginPages], CtorType.Props] = 
               ^.marginLeft := 5.px,
               "Sign In",
               ^.href := config.value.loginUrl,
-              ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.Login) }
-            )
-          )
-        )
-      )
+              ^.onClick ==> { e => e.preventDefaultCB >> ctl.set(LoginPages.Login) },
+            ),
+          ),
+        ),
+      ),
   )

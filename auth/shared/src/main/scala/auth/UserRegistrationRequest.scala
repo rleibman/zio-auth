@@ -29,7 +29,7 @@ import zio.json.*
 case class UserRegistrationRequest(
   name:     String = "",
   email:    String = "",
-  password: String = ""
+  password: String = "",
 )
 
 object UserRegistrationRequest {
@@ -38,7 +38,7 @@ object UserRegistrationRequest {
     name:           String,
     email:          String,
     password:       String,
-    repeatPassword: String
+    repeatPassword: String,
   ): ValidatedNec[String, UserRegistrationRequest] = {
     val userNameVal =
       if (name.matches("^[a-zA-Z0-9 ]+$")) name.validNec else "Username cannot contain special characters".invalidNec
@@ -53,14 +53,14 @@ object UserRegistrationRequest {
       userNameVal,
       emailVal,
       passwordVal,
-      repeatPasswordVal
+      repeatPasswordVal,
     ).mapN(
       (
         name,
         email,
         password,
-        _
-      ) => UserRegistrationRequest(name, email, password)
+        _,
+      ) => UserRegistrationRequest(name, email, password),
     )
   }
 

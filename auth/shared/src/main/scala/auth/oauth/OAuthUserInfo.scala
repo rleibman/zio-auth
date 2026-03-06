@@ -48,7 +48,7 @@ case class OAuthUserInfo(
   name:          String,
   avatarUrl:     Option[String],
   emailVerified: Boolean,
-  rawData:       Json
+  rawData:       Json,
 )
 
 object OAuthUserInfo {

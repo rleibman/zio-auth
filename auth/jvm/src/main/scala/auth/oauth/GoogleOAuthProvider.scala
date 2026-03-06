@@ -48,7 +48,7 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
       "scope"         -> config.scopes.mkString(" "),
       "state"         -> state,
       "access_type"   -> "offline",
-      "prompt"        -> "consent"
+      "prompt"        -> "consent",
     )
 
     val queryString = params.map { case (k, v) => s"$k=${java.net.URLEncoder.encode(v, "UTF-8")}" }.mkString("&")
@@ -61,7 +61,7 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
       token_type:    String,
       expires_in:    Int,
       refresh_token: Option[String],
-      scope:         String
+      scope:         String,
     )
 
     given JsonDecoder[TokenResponse] = JsonDecoder.derived[TokenResponse]
@@ -74,8 +74,8 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
           "client_id"     -> config.clientId,
           "client_secret" -> config.clientSecret,
           "redirect_uri"  -> config.redirectUri,
-          "grant_type"    -> "authorization_code"
-        )
+          "grant_type"    -> "authorization_code",
+        ),
       )
       .response(asJson[TokenResponse])
 
@@ -102,7 +102,7 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
       name:           String,
       email:          String,
       email_verified: Boolean,
-      picture:        Option[String]
+      picture:        Option[String],
     )
 
     given JsonDecoder[GoogleUserInfo] = JsonDecoder.derived[GoogleUserInfo]
@@ -134,7 +134,7 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
                           name = googleInfo.name,
                           avatarUrl = googleInfo.picture,
                           emailVerified = googleInfo.email_verified,
-                          rawData = rawJson
+                          rawData = rawJson,
                         )
                       }
                   }

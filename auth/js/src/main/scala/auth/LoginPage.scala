@@ -31,11 +31,11 @@ import zio.json.ast.Json
 case class LoginPageState(
   email:    String = "",
   password: String = "",
-  error:    Option[String] = None
+  error:    Option[String] = None,
 )
 
 def LoginPage[ConnectionId: JsonEncoder](
-  oauthProviders: List[OAuthProviderUI] = List.empty
+  oauthProviders: List[OAuthProviderUI] = List.empty,
 ) =
   ScalaFnComponent
     .withHooks[(ctl: RouterCtl[LoginPages], connectionId: Option[ConnectionId])]
@@ -45,7 +45,7 @@ def LoginPage[ConnectionId: JsonEncoder](
       (
         _,
         config,
-        _ // state
+        _, // state
       ) =>
         AuthClient
           .clientAuthConfig()
@@ -56,13 +56,33 @@ def LoginPage[ConnectionId: JsonEncoder](
       (
         p,
         config,
-        state
+        state,
       ) =>
         <.div(
           <.h1("Sign in to your account"),
           <.p(^.className := "instructions", "Welcome back! Please enter your details to login."),
           <.div(
             ^.className := "form-container",
+            // OAuth section (only rendered if providers configured)
+            if (oauthProviders.nonEmpty) {
+              <.div(
+                ^.className := "auth-oauth-section",
+                <.div(
+                  ^.className := "auth-oauth-divider",
+                  <.span("OR"),
+                ),
+                VdomArray(
+                  oauthProviders.map { provider =>
+                    OAuthButton(
+                      provider = provider.provider,
+                      icon = provider.icon,
+                      label = provider.label,
+                      className = provider.className,
+                    )
+                  }*,
+                ),
+              )
+            } else EmptyVdom,
             <.form(
               ^.onSubmit ==> { e =>
                 e.preventDefaultCB >>
@@ -83,8 +103,8 @@ def LoginPage[ConnectionId: JsonEncoder](
                   ^.placeholder := "wizard@example.com",
                   ^.required    := true,
                   ^.`type`      := "email",
-                  ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) }
-                )
+                  ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(email = e.target.value)) },
+                ),
               ),
               <.div(
                 <.label("Password", ^.`for` := "password"),
@@ -95,8 +115,8 @@ def LoginPage[ConnectionId: JsonEncoder](
                   ^.required     := true,
                   ^.placeholder  := "••••••••",
                   ^.`type`       := "password",
-                  ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) }
-                )
+                  ^.onChange ==> { (e: ReactEventFromInput) => state.modState(_.copy(password = e.target.value)) },
+                ),
               ),
               <.div(
                 <.a(
@@ -104,32 +124,12 @@ def LoginPage[ConnectionId: JsonEncoder](
                   ^.paddingTop := 20.px,
                   "Forgot password?",
                   ^.href := config.value.requestPasswordRecoveryUrl,
-                  ^.onClick ==> { e => e.preventDefaultCB >> p.ctl.set(LoginPages.RequestLostPassword) }
-                )
+                  ^.onClick ==> { e => e.preventDefaultCB >> p.ctl.set(LoginPages.RequestLostPassword) },
+                ),
               ),
               <.div(<.button(^.`type` := "submit", "Login")),
-              state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e))
+              state.value.error.fold(EmptyVdom)(e => <.div(^.className := "error", e)),
             ),
-            // OAuth section (only rendered if providers configured)
-            if (oauthProviders.nonEmpty) {
-              <.div(
-                ^.className := "auth-oauth-section",
-                <.div(
-                  ^.className := "auth-oauth-divider",
-                  <.span("OR")
-                ),
-                VdomArray(
-                  oauthProviders.map { provider =>
-                    OAuthButton(
-                      provider = provider.provider,
-                      icon = provider.icon,
-                      label = provider.label,
-                      className = provider.className
-                    )
-                  }*
-                )
-              )
-            } else EmptyVdom,
             // Footer
             <.div(
               ^.className := "other-instructions",
@@ -138,10 +138,10 @@ def LoginPage[ConnectionId: JsonEncoder](
                 ^.marginLeft := 5.px,
                 "Register now",
                 ^.href := config.value.requestRegistrationUrl,
-                ^.onClick ==> { e => e.preventDefaultCB >> p.ctl.set(LoginPages.RequestRegistration) }
+                ^.onClick ==> { e => e.preventDefaultCB >> p.ctl.set(LoginPages.RequestRegistration) },
               ),
-              <.div("By Logging in you agree to our terms of service and privacy policy.")
-            )
-          )
-        )
+              <.div("By Logging in you agree to our terms of service and privacy policy."),
+            ),
+          ),
+        ),
     )

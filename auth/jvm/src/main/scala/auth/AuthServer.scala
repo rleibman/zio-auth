@@ -40,7 +40,7 @@ object AuthServer {
       body.asString
         .flatMap(s =>
           ZIO
-            .fromEither(s.fromJson[A]).mapError(e => AuthError(s"Could not parse request body: $e"))
+            .fromEither(s.fromJson[A]).mapError(e => AuthError(s"Could not parse request body: $e")),
         ).mapError(AuthError(_))
 
   }
@@ -50,7 +50,7 @@ object AuthServer {
 trait AuthServer[
   UserType:     {JsonEncoder, JsonDecoder, Tag},
   UserPK:       {JsonEncoder, JsonDecoder, Tag},
-  ConnectionId: {JsonEncoder, JsonDecoder, Tag}
+  ConnectionId: {JsonEncoder, JsonDecoder, Tag},
 ] {
 
   import AuthServer.*
@@ -61,7 +61,7 @@ trait AuthServer[
   private given JsonCodec[UserCodePurpose] =
     JsonCodec.string.transformOrFail(
       s => UserCodePurpose.values.find(_.toString == s).toRight(s"Unknown UserCodePurpose: $s"),
-      _.toString
+      _.toString,
     )
 
   private given JsonCodec[UserCode[UserPK]] = JsonCodec.derived[UserCode[UserPK]]
@@ -105,10 +105,10 @@ trait AuthServer[
               path = Some(Path.decode("/refresh")),
               isSecure = true,
               isHttpOnly = true,
-              sameSite = Some(SameSite.Strict)
-            )
+              sameSite = Some(SameSite.Strict),
+            ),
           )
-      }
+      },
     )
 
   def unauthRoutes: URIO[AuthConfig & OAuthService & OAuthStateStore, Routes[AuthConfig, AuthError]] =
@@ -123,8 +123,8 @@ trait AuthServer[
           // If the user doesn't exist, we don't want to tell the user, we return Response.ok regardless
           _ <- userOpt.fold(
             ZIO.logInfo(
-              s"Attempted to recover password for ${parsed.email}, but the user with that email does not exist"
-            )
+              s"Attempted to recover password for ${parsed.email}, but the user with that email does not exist",
+            ),
           ) { user =>
             val userCode = UserCode(UserCodePurpose.LostPassword, getPK(user)) // Create a code for the user to confirm registration
             for {
@@ -133,7 +133,7 @@ trait AuthServer[
               _ <- sendEmail(
                 "Password Recovery Request",
                 getEmailBodyHtml(user, UserCodePurpose.LostPassword, confirmUrl),
-                user
+                user,
               )
             } yield ()
           }
@@ -147,9 +147,9 @@ trait AuthServer[
           userOpt     <- userByPK(decodedUser.userPK)
           _ <- userOpt.fold(ZIO.fail(AuthError("User Not Found")))(user =>
             changePassword(decodedUser.userPK, parsed.password)
-              .provideLayer(ZLayer.succeed(Session(user, None)))
+              .provideLayer(ZLayer.succeed(Session(user, None))),
           )
-        } yield Response.ok // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
+        } yield Response.ok, // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
       ),
       Method.POST / config.requestRegistrationUrl -> handler((req: Request) =>
         for {
@@ -157,7 +157,7 @@ trait AuthServer[
           validated <- ZIO
             .fromEither(
               UserRegistrationRequest
-                .validateRequest(parsed.name, parsed.email, parsed.password, parsed.password).toEither
+                .validateRequest(parsed.name, parsed.email, parsed.password, parsed.password).toEither,
             ).mapError(e => AuthBadRequest(e.toNonEmptyList.toList.mkString(", ")))
           // Create the user, but set it to inactive and save it
           _ <- ZIO
@@ -166,7 +166,7 @@ trait AuthServer[
           user <- createUser(
             validated.name,
             validated.email,
-            validated.password
+            validated.password,
           )
           userCode = UserCode(UserCodePurpose.NewUser, getPK(user)) // Create a code for the user to confirm registration
           userValidationToken <- jwtEncode(userCode, config.codeExpirationHours) // Encode the user code into a jwt
@@ -174,9 +174,9 @@ trait AuthServer[
           _ <- sendEmail(
             "User creation confirmation",
             getEmailBodyHtml(user, UserCodePurpose.NewUser, confirmUrl),
-            user
+            user,
           )
-        } yield Response.status(Status.NoContent) // Nothing is really required back
+        } yield Response.status(Status.NoContent), // Nothing is really required back
       ).mapError(AuthError(_)),
       Method.POST / config.confirmRegistrationUrl -> handler { (req: Request) =>
         for {
@@ -194,15 +194,15 @@ trait AuthServer[
             loginUrl = config.loginUrl,
             logoutUrl = config.logoutUrl,
             refreshUrl = config.refreshUrl,
-            whoAmIUrl = config.whoAmIUrl
-          ).toJson
-        )
+            whoAmIUrl = config.whoAmIUrl,
+          ).toJson,
+        ),
       ),
       Method.POST / config.loginUrl -> handler { (req: Request) =>
         case class LoginRequest(
           email:        String,
           password:     String,
-          connectionId: Option[ConnectionId]
+          connectionId: Option[ConnectionId],
         )
         given JsonDecoder[LoginRequest] = JsonDecoder.derived
 
@@ -210,14 +210,14 @@ trait AuthServer[
           loginRequest <- req.body.as[LoginRequest]
           login        <- login(loginRequest.email, loginRequest.password, loginRequest.connectionId)
           _ <- login.fold(ZIO.logDebug(s"Bad login for ${loginRequest.email}"))(_ =>
-            ZIO.logDebug(s"Good Login for ${loginRequest.email}")
+            ZIO.logDebug(s"Good Login for ${loginRequest.email}"),
           )
           res <- login.fold(ZIO.succeed {
             Response.unauthorized("Could not log on, sorry")
           }) { user =>
             addTokens(
               Session(user, loginRequest.connectionId),
-              Response.json(user.toJson)
+              Response.json(user.toJson),
             )
           }
         } yield res).mapError(AuthError(_))
@@ -232,10 +232,10 @@ trait AuthServer[
           u     <- claim.decodedContent[Session[UserType, ConnectionId]]
           responseWithTokens <- addTokens(
             u,
-            Response.ok
+            Response.ok,
           )
         } yield responseWithTokens
-      }
+      },
     ) ++ oauthRoutes
 
   /** OAuth routes for login and callback
@@ -258,7 +258,7 @@ trait AuthServer[
           Method.GET / "oauth" / string("provider") / "login" -> handler {
             (
               provider: String,
-              _:        Request
+              _:        Request,
             ) =>
               (for {
                 oauthProvider <- oauthService.getProvider(provider)
@@ -274,7 +274,7 @@ trait AuthServer[
           Method.GET / "oauth" / string("provider") / "callback" -> handler {
             (
               provider: String,
-              req:      Request
+              req:      Request,
             ) =>
               (for {
                 _ <- ZIO.logInfo(s"OAuth callback received for provider: $provider")
@@ -344,7 +344,7 @@ trait AuthServer[
                 config <- ZIO.service[AuthConfig]
                 responseWithTokens <- addTokens(
                   Session(user, None),
-                  Response.seeOther(URL.root) // Redirect to app
+                  Response.seeOther(URL.root), // Redirect to app
                 )
 
                 _ <- ZIO.logInfo(s"Tokens added, redirecting to: ${URL.root}")
@@ -352,14 +352,14 @@ trait AuthServer[
               } yield responseWithTokens)
                 .mapError(AuthError(_))
                 .tapError(e => ZIO.logError(s"OAuth callback error: ${e.getMessage}"))
-          }
+          },
         )
       }
     }
 
   protected def addTokens(
     session:  Session[UserType, ConnectionId],
-    response: Response
+    response: Response,
   ): URIO[AuthConfig, Response] =
     for {
       config       <- ZIO.service[AuthConfig]
@@ -376,21 +376,21 @@ trait AuthServer[
           path = Option(Path.decode("/refresh")),
           isSecure = true,
           isHttpOnly = true,
-          sameSite = Some(SameSite.Strict)
-        )
+          sameSite = Some(SameSite.Strict),
+        ),
       )
 
   def login(
     userName:     String,
     password:     String,
-    connectionId: Option[ConnectionId]
+    connectionId: Option[ConnectionId],
   ): IO[AuthError, Option[UserType]]
 
   def logout(): ZIO[Session[UserType, ConnectionId], AuthError, Unit]
 
   def changePassword(
     userPK:      UserPK,
-    newPassword: String
+    newPassword: String,
   ): ZIO[Session[UserType, ConnectionId], AuthError, Unit]
 
   def userByEmail(email: String): IO[AuthError, Option[UserType]]
@@ -411,7 +411,7 @@ trait AuthServer[
     */
   def userByOAuthProvider(
     provider:   String,
-    providerId: String
+    providerId: String,
   ): IO[AuthError, Option[UserType]] = ZIO.none
 
   /** Create a new user from OAuth provider information
@@ -430,12 +430,12 @@ trait AuthServer[
   def createOAuthUser(
     oauthInfo:    OAuthUserInfo,
     provider:     String,
-    connectionId: Option[ConnectionId]
+    connectionId: Option[ConnectionId],
   ): IO[AuthError, UserType] =
     ZIO.fail(
       AuthError(
-        "OAuth user creation not implemented. Override createOAuthUser in your AuthServer implementation."
-      )
+        "OAuth user creation not implemented. Override createOAuthUser in your AuthServer implementation.",
+      ),
     )
 
   /** Link an OAuth provider to an existing user account
@@ -461,12 +461,12 @@ trait AuthServer[
     user:         UserType,
     provider:     String,
     providerId:   String,
-    providerData: Json
+    providerData: Json,
   ): IO[AuthError, UserType] =
     ZIO.fail(
       AuthError(
-        "OAuth account linking not implemented. Override linkOAuthToUser in your AuthServer implementation."
-      )
+        "OAuth account linking not implemented. Override linkOAuthToUser in your AuthServer implementation.",
+      ),
     )
 
   def jwtDecode(token: String): ZIO[AuthConfig, AuthError, JwtClaim] =
@@ -481,7 +481,7 @@ trait AuthServer[
 
   def jwtEncode[ToEncode: JsonEncoder](
     toEncode: ToEncode,
-    ttl:      Duration
+    ttl:      Duration,
   ): ZIO[AuthConfig, Nothing, String] =
     for {
       config    <- ZIO.service[AuthConfig]
@@ -508,7 +508,7 @@ trait AuthServer[
     */
   def sessionLayerFromToken(
     token:        String,
-    connectionId: Option[ConnectionId] = None
+    connectionId: Option[ConnectionId] = None,
   ): ZIO[AuthConfig, AuthError, ZLayer[Any, Nothing, Session[UserType, ConnectionId]]] =
     for {
       _     <- ZIO.fail(InvalidToken("Token is invalid")).whenZIO(isInvalid(token))
@@ -567,7 +567,7 @@ trait AuthServer[
   def createUser(
     name:     String,
     email:    String,
-    password: String
+    password: String,
   ): IO[AuthError, UserType]
 
   def activateUser(userPK: UserPK): IO[AuthError, Unit] = ZIO.unit // By default users don't need activation.
@@ -575,13 +575,13 @@ trait AuthServer[
   def sendEmail(
     subject: String,
     body:    String,
-    user:    UserType
+    user:    UserType,
   ): IO[AuthError, Unit]
 
   def getEmailBodyHtml(
     user:    UserType,
     purpose: UserCodePurpose,
-    url:     String
+    url:     String,
   ): String = {
     purpose match {
       case UserCodePurpose.NewUser =>

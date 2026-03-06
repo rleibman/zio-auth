@@ -31,7 +31,7 @@ object PasswordRecoveryNewPasswordRequest {
   def validateRequest(
     confirmationCode: String,
     password:         String,
-    repeatPassword:   String
+    repeatPassword:   String,
   ): ValidatedNec[String, PasswordRecoveryNewPasswordRequest] = {
     val passwordVal =
       if (password.length >= 8) password.validNec else "Password must be at least 8 characters long".invalidNec
@@ -40,12 +40,12 @@ object PasswordRecoveryNewPasswordRequest {
 
     (
       passwordVal,
-      repeatPasswordVal
+      repeatPasswordVal,
     ).mapN(
       (
         password,
-        _
-      ) => PasswordRecoveryNewPasswordRequest(password = password, confirmationCode = confirmationCode)
+        _,
+      ) => PasswordRecoveryNewPasswordRequest(password = password, confirmationCode = confirmationCode),
     )
   }
 
@@ -53,7 +53,7 @@ object PasswordRecoveryNewPasswordRequest {
 
 case class PasswordRecoveryNewPasswordRequest(
   confirmationCode: String,
-  password:         String = ""
+  password:         String = "",
 )
 
 given JsonCodec[PasswordRecoveryNewPasswordRequest] = JsonCodec.derived[PasswordRecoveryNewPasswordRequest]

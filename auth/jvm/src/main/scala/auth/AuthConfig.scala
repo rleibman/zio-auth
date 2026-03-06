@@ -45,5 +45,5 @@ case class AuthConfig(
   //                       sessionSameSite: Option[SameSite] = Some(SameSite.Strict),
   accessTTL:           Duration = 1.minutes, // For testing
   refreshTTL:          Duration = 5.minutes,
-  codeExpirationHours: Duration = 2.days
+  codeExpirationHours: Duration = 2.days,
 )
