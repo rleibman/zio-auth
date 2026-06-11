@@ -22,12 +22,12 @@ Global / watchAntiEntropy := 1.second
 val catsVersion = "2.13.0"
 val courierVersion = "4.0.0-RC1"
 val jwtVersion = "11.0.4"
-val logbackVersion = "1.5.32"
+val logbackVersion = "1.5.34"
 val scalaJsDomVersion = "2.8.1"
 val scalaTagsVersion = "0.13.1"
 val scalaXmlVersion = "2.3.0"
 val scalajsReactVersion = "4.0.0"
-val sttpVersion = "4.0.24"
+val sttpVersion = "4.0.25"
 val webpackVersion = "5.96.1"
 val zioConfigVersion = "4.0.7"
 val zioHttpVersion = "3.11.2"
@@ -37,7 +37,7 @@ val zioNioVersion = "2.0.2"
 val zioCacheVersion = "0.2.8"
 val zioSchemaJsonVersion = "1.8.0"
 val zioVersion = "2.1.26"
-val reactVersion = "^18.3.0"
+val reactVersion = "^19.2.0"
 
 lazy val scala3Opts = Seq(
   "-deprecation", // Emit warning and location for usages of deprecated APIs.
