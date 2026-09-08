@@ -46,4 +46,5 @@ case class AuthConfig(
   accessTTL:           Duration = 1.minutes, // For testing
   refreshTTL:          Duration = 5.minutes,
   codeExpirationHours: Duration = 2.days,
+  secureCookie:        Boolean = true,
 )

@@ -71,19 +71,19 @@ object OAuthService {
     *   ZLayer providing OAuthService
     */
   def live(
-    googleConfig:  Option[OAuthProviderConfig] = None,
-    githubConfig:  Option[OAuthProviderConfig] = None,
-    discordConfig: Option[OAuthProviderConfig] = None,
+    googleConfig:   Option[OAuthProviderConfig] = None,
+    githubConfig:   Option[OAuthProviderConfig] = None,
+    discordConfig:  Option[OAuthProviderConfig] = None,
+    telegramConfig: Option[OAuthProviderConfig] = None,
   ): ULayer[OAuthService] =
     ZLayer.succeed {
       new OAuthService {
 
         private val providers: Map[String, OAuthProvider] = List(
           googleConfig.map(config => "google" -> new GoogleOAuthProvider(config)),
-          // NOTE: GitHub and Discord providers not yet implemented
-          // Uncomment when providers are added:
+          discordConfig.map(config => "discord" -> new DiscordOAuthProvider(config)),
+          telegramConfig.map(config => "telegram" -> new TelegramOAuthProvider(config)),
           // githubConfig.map(config => "github" -> new GitHubOAuthProvider(config)),
-          // discordConfig.map(config => "discord" -> new DiscordOAuthProvider(config))
         ).flatten.toMap
 
         override def getProvider(name: String): IO[AuthError, OAuthProvider] =
