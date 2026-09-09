@@ -72,4 +72,20 @@ trait OAuthProvider {
     */
   def getUserInfo(accessToken: String): IO[AuthError, OAuthUserInfo]
 
+  /** Extract the authorization "code" from callback query parameters.
+    *
+    * Standard OAuth providers send a single `code` query parameter. Non-standard providers (e.g. Telegram Login
+    * Widget) send multiple parameters that must be assembled into a token. Override this method to customize
+    * extraction; the default implementation reads the `code` query parameter.
+    *
+    * @param queryParams
+    *   All query parameters from the callback request URL
+    * @return
+    *   The "code" string to pass to [[exchangeCodeForToken]], or an error if the params are missing/invalid
+    */
+  def extractCodeFromCallback(queryParams: Map[String, List[String]]): IO[AuthError, String] =
+    ZIO
+      .fromOption(queryParams.get("code").flatMap(_.headOption))
+      .orElseFail(AuthError("Missing 'code' parameter in OAuth callback"))
+
 }

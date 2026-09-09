@@ -61,3 +61,6 @@ dist
 /temp
 /fileStore
 /dice_roller/wasm-out/
+
+# npm (vite build for the server/js demo app)
+node_modules

@@ -280,15 +280,10 @@ trait AuthServer[
                 _ <- ZIO.logInfo(s"OAuth callback received for provider: $provider")
                 _ <- ZIO.logInfo(s"Request URL: ${req.url}")
 
-                // Extract code and state from query parameters
-                code <- ZIO
-                  .fromOption(req.url.queryParams.queryParam("code"))
-                  .orElseFail(AuthError("Missing 'code' parameter"))
+                // Extract state and provider-specific code from query parameters
                 state <- ZIO
                   .fromOption(req.url.queryParams.queryParam("state"))
                   .orElseFail(AuthError("Missing 'state' parameter"))
-
-                _ <- ZIO.logInfo(s"OAuth code and state extracted successfully")
 
                 // Validate state (CSRF protection)
                 stateData <- stateStore.remove(state).flatMap {
@@ -304,9 +299,15 @@ trait AuthServer[
 
                 _ <- ZIO.logInfo(s"State validated successfully")
 
-                // Exchange code for access token
+                // Let provider extract its code from callback params (standard: ?code=; Telegram: widget fields)
                 oauthProvider <- oauthService.getProvider(provider)
-                accessToken   <- oauthProvider.exchangeCodeForToken(code)
+                allParams      = req.url.queryParams.map.view.mapValues(_.toList).toMap
+                code          <- oauthProvider.extractCodeFromCallback(allParams)
+
+                _ <- ZIO.logInfo(s"OAuth code and state extracted successfully")
+
+                // Exchange code for access token
+                accessToken <- oauthProvider.exchangeCodeForToken(code)
 
                 _ <- ZIO.logInfo(s"Access token obtained from provider")
 
@@ -374,7 +375,7 @@ trait AuthServer[
           maxAge = Option(config.refreshTTL.plus(1.hour)),
           domain = None,
           path = Option(Path.decode("/refresh")),
-          isSecure = true,
+          isSecure = config.secureCookie,
           isHttpOnly = true,
           sameSite = Some(SameSite.Strict),
         ),
