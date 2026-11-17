@@ -49,6 +49,19 @@ trait OAuthProvider {
     */
   def generateAuthUrl(state: String): UIO[String]
 
+  /** Whether the provider supports PKCE (RFC 7636). When it does, zio-auth keeps a verifier with the state and passes
+    * its challenge and the verifier to the two methods below; override both. Default: no.
+    */
+  def supportsPkce: Boolean = false
+
+  /** The authorization URL, with the PKCE `codeChallenge` (S256) when there is one. Default:
+    * [[generateAuthUrl(state)]], ignoring it.
+    */
+  def generateAuthUrl(
+    state:         String,
+    codeChallenge: Option[String],
+  ): UIO[String] = generateAuthUrl(state)
+
   /** Exchange the authorization code for an access token
     *
     * After the user authorizes, the provider redirects back with a code. This method exchanges that code for an access
@@ -60,6 +73,14 @@ trait OAuthProvider {
     *   Access token
     */
   def exchangeCodeForToken(code: String): IO[AuthError, String]
+
+  /** The code exchange, with the PKCE `codeVerifier` when there is one. Default: [[exchangeCodeForToken(code)]],
+    * ignoring it.
+    */
+  def exchangeCodeForToken(
+    code:         String,
+    codeVerifier: Option[String],
+  ): IO[AuthError, String] = exchangeCodeForToken(code)
 
   /** Fetch user information using the access token
     *
@@ -74,9 +95,9 @@ trait OAuthProvider {
 
   /** Extract the authorization "code" from callback query parameters.
     *
-    * Standard OAuth providers send a single `code` query parameter. Non-standard providers (e.g. Telegram Login
-    * Widget) send multiple parameters that must be assembled into a token. Override this method to customize
-    * extraction; the default implementation reads the `code` query parameter.
+    * Standard OAuth providers send a single `code` query parameter. Non-standard providers (e.g. Telegram Login Widget)
+    * send multiple parameters that must be assembled into a token. Override this method to customize extraction; the
+    * default implementation reads the `code` query parameter.
     *
     * @param queryParams
     *   All query parameters from the callback request URL

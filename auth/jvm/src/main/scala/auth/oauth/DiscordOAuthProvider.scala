@@ -31,26 +31,39 @@ import zio.json.ast.Json
 
 /** Discord OAuth 2.0 provider.
   *
-  * Uses Discord's standard OAuth2 flow with the `identify` and `email` scopes. Redirects through
-  * `/oauth/discord/login` → Discord consent → `/oauth/discord/callback`.
+  * Uses Discord's standard OAuth2 flow with the `identify` and `email` scopes. Redirects through `/oauth/discord/login`
+  * → Discord consent → `/oauth/discord/callback`.
   */
 class DiscordOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
 
   override def providerName: String = "discord"
 
-  override def generateAuthUrl(state: String): UIO[String] = {
+  override def supportsPkce: Boolean = true
+
+  override def generateAuthUrl(state: String): UIO[String] = generateAuthUrl(state, None)
+
+  override def generateAuthUrl(
+    state:         String,
+    codeChallenge: Option[String],
+  ): UIO[String] = {
     val params = Map(
       "client_id"     -> config.clientId,
       "redirect_uri"  -> config.redirectUri,
       "response_type" -> "code",
       "scope"         -> config.scopes.mkString(" "),
       "state"         -> state,
-    )
+    ) ++ codeChallenge
+      .map(challenge => Map("code_challenge" -> challenge, "code_challenge_method" -> "S256")).getOrElse(Map.empty)
     val queryString = params.map { case (k, v) => s"$k=${java.net.URLEncoder.encode(v, "UTF-8")}" }.mkString("&")
     ZIO.succeed(s"${config.authorizationUri}?$queryString")
   }
 
-  override def exchangeCodeForToken(code: String): IO[AuthError, String] = {
+  override def exchangeCodeForToken(code: String): IO[AuthError, String] = exchangeCodeForToken(code, None)
+
+  override def exchangeCodeForToken(
+    code:         String,
+    codeVerifier: Option[String],
+  ): IO[AuthError, String] = {
     case class TokenResponse(
       access_token: String,
       token_type:   String,
@@ -68,7 +81,7 @@ class DiscordOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
           "grant_type"    -> "authorization_code",
           "code"          -> code,
           "redirect_uri"  -> config.redirectUri,
-        ),
+        ) ++ codeVerifier.map("code_verifier" -> _),
       )
       .response(asJson[TokenResponse])
 
@@ -109,17 +122,20 @@ class DiscordOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
           response.body match {
             case Right(jsonStr) =>
               for {
-                rawJson <- ZIO.fromEither(jsonStr.fromJson[Json]).mapError(e => AuthError(s"Discord user JSON parse failed: $e"))
-                user    <- ZIO.fromEither(jsonStr.fromJson[DiscordUser]).mapError(e => AuthError(s"Discord user decode failed: $e"))
-                displayName = if (user.discriminator == "0") user.username else s"${user.username}#${user.discriminator}"
-                avatarUrl   = user.avatar.map(hash => s"https://cdn.discordapp.com/avatars/${user.id}/$hash.png")
+                rawJson <- ZIO
+                  .fromEither(jsonStr.fromJson[Json]).mapError(e => AuthError(s"Discord user JSON parse failed: $e"))
+                user <- ZIO
+                  .fromEither(jsonStr.fromJson[DiscordUser]).mapError(e => AuthError(s"Discord user decode failed: $e"))
+                displayName =
+                  if (user.discriminator == "0") user.username else s"${user.username}#${user.discriminator}"
+                avatarUrl = user.avatar.map(hash => s"https://cdn.discordapp.com/avatars/${user.id}/$hash.png")
               } yield OAuthUserInfo(
-                providerId    = user.id,
-                email         = user.email.getOrElse(""),
-                name          = displayName,
-                avatarUrl     = avatarUrl,
+                providerId = user.id,
+                email = user.email.getOrElse(""),
+                name = displayName,
+                avatarUrl = avatarUrl,
                 emailVerified = user.verified.getOrElse(false),
-                rawData       = rawJson,
+                rawData = rawJson,
               )
             case Left(e) =>
               ZIO.fail(AuthError(s"Discord user info failed (${response.code}): $e"))
@@ -136,8 +152,8 @@ class DiscordOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
 object DiscordOAuthProvider {
 
   val AuthorizationUri = "https://discord.com/oauth2/authorize"
-  val TokenUri         = "https://discord.com/api/oauth2/token"
-  val UserInfoUri      = "https://discord.com/api/users/@me"
-  val DefaultScopes    = List("identify", "email")
+  val TokenUri = "https://discord.com/api/oauth2/token"
+  val UserInfoUri = "https://discord.com/api/users/@me"
+  val DefaultScopes = List("identify", "email")
 
 }

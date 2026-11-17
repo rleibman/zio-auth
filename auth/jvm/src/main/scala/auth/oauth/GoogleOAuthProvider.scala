@@ -40,7 +40,14 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
 
   override def providerName: String = "google"
 
-  override def generateAuthUrl(state: String): UIO[String] = {
+  override def supportsPkce: Boolean = true
+
+  override def generateAuthUrl(state: String): UIO[String] = generateAuthUrl(state, None)
+
+  override def generateAuthUrl(
+    state:         String,
+    codeChallenge: Option[String],
+  ): UIO[String] = {
     val params = Map(
       "client_id"     -> config.clientId,
       "redirect_uri"  -> config.redirectUri,
@@ -49,13 +56,19 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
       "state"         -> state,
       "access_type"   -> "offline",
       "prompt"        -> "consent",
-    )
+    ) ++ codeChallenge
+      .map(challenge => Map("code_challenge" -> challenge, "code_challenge_method" -> "S256")).getOrElse(Map.empty)
 
     val queryString = params.map { case (k, v) => s"$k=${java.net.URLEncoder.encode(v, "UTF-8")}" }.mkString("&")
     ZIO.succeed(s"${config.authorizationUri}?$queryString")
   }
 
-  override def exchangeCodeForToken(code: String): IO[AuthError, String] = {
+  override def exchangeCodeForToken(code: String): IO[AuthError, String] = exchangeCodeForToken(code, None)
+
+  override def exchangeCodeForToken(
+    code:         String,
+    codeVerifier: Option[String],
+  ): IO[AuthError, String] = {
     case class TokenResponse(
       access_token:  String,
       token_type:    String,
@@ -75,7 +88,7 @@ class GoogleOAuthProvider(config: OAuthProviderConfig) extends OAuthProvider {
           "client_secret" -> config.clientSecret,
           "redirect_uri"  -> config.redirectUri,
           "grant_type"    -> "authorization_code",
-        ),
+        ) ++ codeVerifier.map("code_verifier" -> _),
       )
       .response(asJson[TokenResponse])
 
