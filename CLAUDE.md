@@ -44,7 +44,22 @@ The library is organized as a cross-platform build:
    - GET `/api/whoami` - Get current user from session
 
 5. **Token Refresh**:
-   - GET `/refresh` - Renew access token using refresh cookie
+   - GET `/refresh` - Renew access token using refresh cookie (the refresh token is rotated: each works once)
+
+### Sessions (v4.0.0+)
+
+- **Tokens carry the user's key, never the user** (`TokenClaims`: type, user key, connection, session id, the user's session epoch,
+  a per-token id). Every use reads the user again with `userByPK`, so a renamed, disabled or deleted user is seen at once.
+- **Token types**: access, refresh, registration code, recovery code. None is accepted in another's place.
+- **Revocation hooks** (implement them, or nothing is ever revoked):
+  - `isInvalid` / `invalidateToken`: a store of revoked tokens. Logout revokes the access and refresh token; `/refresh` revokes the
+    one it used; a registration or recovery code is revoked when used.
+  - `sessionEpoch(user)`: tokens are refused once it differs from when they were issued. `endAllSessions(pk)` (called after a
+    password reset) should raise it.
+  - `mayHaveSession(user)`: e.g. false for a disabled account; checked at login and on every use.
+- **Registration doesn't reveal accounts**: a taken address gets the same 204 as a new one and its owner is emailed
+  (`getAccountExistsEmailBodyHtml`); `AuthConfig.revealExistingEmailOnRegistration = true` restores the 409.
+- **Logs** never name emails, tokens, callback URLs or users.
 
 ### OAuth 2.0 Authentication (v3.0.0+)
 
@@ -63,8 +78,12 @@ The library is organized as a cross-platform build:
 - Extensible architecture for adding more (GitHub, Discord, etc.)
 
 **Key Features**:
-- **CSRF Protection**: State tokens with expiration and cleanup
-- **Auto-Account Linking**: OAuth accounts auto-link to existing email/password accounts by email
+- **CSRF Protection**: State tokens (from a CSPRNG) with expiration and cleanup, bound to the browser that started the sign-in by an HttpOnly
+  cookie (`oauthStateCookieName`); a callback without it is refused (login CSRF)
+- **PKCE** (RFC 7636): providers that support it (`supportsPkce`: Google, Discord) get an S256 challenge, and the verifier at the code
+  exchange
+- **Auto-Account Linking**: OAuth accounts auto-link to existing email/password accounts by email; `linkOAuthToUser` must check
+  that the provider verified the email, or anyone can take over an account
 - **Generic Provider Architecture**: Easy to add new OAuth providers via `OAuthProvider` trait
 - **Normalized User Info**: `OAuthUserInfo` provides consistent user data across all providers
 - **Reusable UI Component**: `OAuthButton` for frontend integration
@@ -112,9 +131,12 @@ trait AuthServer[UserType, UserPK, ConnectionId] {
   def sendEmail(subject: String, body: String, user: UserType): IO[AuthError, Unit]
   def getEmailBodyHtml(user: UserType, purpose: UserCodePurpose, url: String): String
 
-  // Token management (optional hooks)
+  // Sessions and revocation (optional hooks; see "Sessions")
   def isInvalid(tok: String): IO[AuthError, Boolean] = ZIO.succeed(false)
   def invalidateToken(token: String): IO[AuthError, Unit] = ZIO.unit
+  def sessionEpoch(user: UserType): IO[AuthError, Long] = ZIO.succeed(0L)
+  def endAllSessions(userPK: UserPK): IO[AuthError, Unit] = ZIO.unit
+  def mayHaveSession(user: UserType): Boolean = true
 
   // OAuth methods (v3.0.0+, with default implementations)
   def userByOAuthProvider(
@@ -336,8 +358,8 @@ Errors are returned as HTTP status codes:
 **Token Refresh Flow**:
 1. Client detects 401 with "token_expired" message
 2. Client calls `GET /refresh` (refresh cookie sent automatically)
-3. Server validates refresh token
-4. Server issues new access token + new refresh token
+3. Server validates refresh token (its type, revocation, the user still allowed a session, the epoch) and revokes it
+4. Server issues new access token + new refresh token (same session id)
 5. Client updates localStorage and retries original request
 
 **Middleware**:

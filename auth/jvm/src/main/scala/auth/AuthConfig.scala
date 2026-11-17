@@ -47,4 +47,9 @@ case class AuthConfig(
   refreshTTL:          Duration = 5.minutes,
   codeExpirationHours: Duration = 2.days,
   secureCookie:        Boolean = true,
+  // The cookie that binds an OAuth sign-in to the browser that started it (login CSRF).
+  oauthStateCookieName: String = "oauth_state",
+  // Whether registering a taken address says so (409). Off by default: the answer is the same as for a new address, and the address's owner is
+  // emailed instead, so registration can't be used to find out who has an account.
+  revealExistingEmailOnRegistration: Boolean = false,
 )

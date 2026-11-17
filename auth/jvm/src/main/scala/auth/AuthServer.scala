@@ -30,7 +30,9 @@ import zio.http.Cookie.SameSite
 import zio.json.*
 import zio.json.ast.Json
 
-import java.time.LocalDateTime
+import java.nio.charset.StandardCharsets.UTF_8
+import java.security.MessageDigest
+import java.time.Instant
 
 object AuthServer {
 
@@ -45,8 +47,19 @@ object AuthServer {
 
   }
 
+  /** How long an OAuth sign-in may take between the redirect to the provider and its callback. */
+  val oauthStateLifetime: Duration = 10.minutes
+
 }
 
+/** The server side of zio-auth: its routes, and the hooks an application implements over its own users.
+  *
+  * Sessions (since 4.0): a token carries the user's key, never the user ([[TokenClaims]]); every use reads the user
+  * again ([[userByPK]]) and checks that it may still have a session ([[mayHaveSession]]), that the token hasn't been
+  * revoked ([[isInvalid]]) and that the user's [[sessionEpoch]] hasn't moved on. Access and refresh tokens can't stand
+  * in for each other; refreshing rotates the refresh token; logging out revokes both; a password reset ends every
+  * session ([[endAllSessions]]) and its code works once.
+  */
 trait AuthServer[
   UserType:     {JsonEncoder, JsonDecoder, Tag},
   UserPK:       {JsonEncoder, JsonDecoder, Tag},
@@ -55,27 +68,34 @@ trait AuthServer[
 
   import AuthServer.*
 
-  private given JsonCodec[Some[UserType]] = JsonCodec.derived[Some[UserType]]
-  private given JsonCodec[Session[UserType, ConnectionId]] = JsonCodec.derived[Session[UserType, ConnectionId]]
-
-  private given JsonCodec[UserCodePurpose] =
-    JsonCodec.string.transformOrFail(
-      s => UserCodePurpose.values.find(_.toString == s).toRight(s"Unknown UserCodePurpose: $s"),
-      _.toString,
-    )
-
-  private given JsonCodec[UserCode[UserPK]] = JsonCodec.derived[UserCode[UserPK]]
+  private given JsonCodec[TokenClaims[UserPK, ConnectionId]] = JsonCodec.derived[TokenClaims[UserPK, ConnectionId]]
 
   extension (claim: JwtClaim) {
 
     def decodedContent[A: JsonDecoder]: ZIO[Any, AuthError, A] =
-      ZIO.fromEither(claim.content.fromJson[A]).mapError(AuthError(_))
+      ZIO.fromEither(claim.content.fromJson[A]).mapError(_ => InvalidToken("Token content not recognized"))
 
   }
 
   final protected def json[A: JsonEncoder](value: A): Response = Response.json(value.toJson)
 
   def getPK(user: UserType): UserPK
+
+  /** The bearer token of a request, if it has one. */
+  private def bearer(request: Request): Option[String] =
+    request.header(Header.Authorization).collect { case Header.Authorization.Bearer(token) => token.value.asString }
+
+  private def clearRefreshCookie(config: AuthConfig): Cookie.Response =
+    Cookie.Response(
+      name = config.refreshTokenName,
+      content = "",
+      maxAge = Some(Duration.Zero),
+      domain = None,
+      path = Some(Path.decode(config.refreshUrl)),
+      isSecure = config.secureCookie,
+      isHttpOnly = true,
+      sameSite = Some(SameSite.Strict),
+    )
 
   def authRoutes: URIO[AuthConfig, Routes[AuthConfig & Session[UserType, ConnectionId], AuthError]] =
     for {
@@ -87,27 +107,13 @@ trait AuthServer[
           case _                                   => Response.unauthorized("No session")
         }
       },
+      // Ends this session: its access token and, when the browser sends it, its refresh token (#9). Other sessions of the user go on.
       Method.GET / config.logoutUrl -> handler { (req: Request) =>
-        val token = req.header(Header.Authorization).map(_.renderedValue.stripPrefix("Bearer "))
+        val tokens = bearer(req).toList ++ req.cookie(config.refreshTokenName).map(_.content).filter(_.nonEmpty).toList
         for {
-          config <- ZIO.service[AuthConfig]
-          _      <- ZIO.foreachDiscard(token)(invalidateToken)
-          _      <- logout()
-          _      <- ZIO.logInfo("User logged out, clearing refresh cookie")
-        } yield Response.ok
-          // Clear the refresh cookie by setting it to expire immediately
-          .addCookie(
-            Cookie.Response(
-              name = config.refreshTokenName,
-              content = "",
-              maxAge = Some(Duration.Zero),
-              domain = None,
-              path = Some(Path.decode("/refresh")),
-              isSecure = true,
-              isHttpOnly = true,
-              sameSite = Some(SameSite.Strict),
-            ),
-          )
+          _ <- ZIO.foreachDiscard(tokens)(invalidateToken)
+          _ <- logout()
+        } yield Response.ok.addCookie(clearRefreshCookie(config))
       },
     )
 
@@ -116,20 +122,15 @@ trait AuthServer[
       config      <- ZIO.service[AuthConfig]
       oauthRoutes <- oauthUnauthRoutes
     } yield Routes(
+      // Answers the same whether or not the address has an account; only the logs (at debug) tell them apart, and they don't name the address.
       Method.POST / config.requestPasswordRecoveryUrl -> handler { (req: Request) =>
         for {
           parsed  <- req.body.as[PasswordRecoveryRequest]
           userOpt <- userByEmail(parsed.email)
-          // If the user doesn't exist, we don't want to tell the user, we return Response.ok regardless
-          _ <- userOpt.fold(
-            ZIO.logInfo(
-              s"Attempted to recover password for ${parsed.email}, but the user with that email does not exist",
-            ),
-          ) { user =>
-            val userCode = UserCode(UserCodePurpose.LostPassword, getPK(user)) // Create a code for the user to confirm registration
+          _ <- userOpt.fold(ZIO.logDebug("Password recovery requested for an address with no account")) { user =>
             for {
-              userValidationToken <- jwtEncode(userCode, config.codeExpirationHours) // Encode the user code into a jwt
-              confirmUrl = s"${config.passwordRecoveryUrl}?code=$userValidationToken"
+              code <- issueCode(user, TokenType.LostPasswordCode, config.codeExpirationHours)
+              confirmUrl = s"${config.passwordRecoveryUrl}?code=$code"
               _ <- sendEmail(
                 "Password Recovery Request",
                 getEmailBodyHtml(user, UserCodePurpose.LostPassword, confirmUrl),
@@ -137,20 +138,20 @@ trait AuthServer[
               )
             } yield ()
           }
-        } yield Response.status(Status.NoContent) // Nothing is really required back
+        } yield Response.status(Status.NoContent)
       },
+      // The code works once (#9), and the new password ends every session the user had: recovering an account is when that matters most.
       Method.POST / config.passwordRecoveryUrl -> handler((req: Request) =>
         for {
-          parsed      <- req.body.as[PasswordRecoveryNewPasswordRequest]
-          claim       <- jwtDecode(parsed.confirmationCode)
-          decodedUser <- claim.decodedContent[UserCode[UserPK]]
-          userOpt     <- userByPK(decodedUser.userPK)
-          _ <- userOpt.fold(ZIO.fail(AuthError("User Not Found")))(user =>
-            changePassword(decodedUser.userPK, parsed.password)
-              .provideLayer(ZLayer.succeed(Session(user, None))),
-          )
-        } yield Response.ok, // TODO change it to Response.status(Status.NoContent) // Nothing is really required back
+          parsed <- req.body.as[PasswordRecoveryNewPasswordRequest]
+          user   <- redeemCode(parsed.confirmationCode, TokenType.LostPasswordCode)
+          _ <- changePassword(getPK(user), parsed.password)
+            .provideLayer(ZLayer.succeed(Session(user, None)))
+          _ <- endAllSessions(getPK(user))
+        } yield Response.ok,
       ),
+      // Unless the application asks otherwise (`revealExistingEmailOnRegistration`), a taken address gets the same answer as a new one: its owner
+      // is told by email instead, so registration can't be used to find out who has an account.
       Method.POST / config.requestRegistrationUrl -> handler((req: Request) =>
         for {
           parsed <- req.body.as[UserRegistrationRequest]
@@ -159,32 +160,32 @@ trait AuthServer[
               UserRegistrationRequest
                 .validateRequest(parsed.name, parsed.email, parsed.password, parsed.password).toEither,
             ).mapError(e => AuthBadRequest(e.toNonEmptyList.toList.mkString(", ")))
-          // Create the user, but set it to inactive and save it
-          _ <- ZIO
-            .fail(EmailAlreadyExists(s"Email already exists ${validated.email}"))
-            .whenZIO(userByEmail(validated.email).map(u => u.isDefined))
-          user <- createUser(
-            validated.name,
-            validated.email,
-            validated.password,
-          )
-          userCode = UserCode(UserCodePurpose.NewUser, getPK(user)) // Create a code for the user to confirm registration
-          userValidationToken <- jwtEncode(userCode, config.codeExpirationHours) // Encode the user code into a jwt
-          confirmUrl = s"${config.confirmRegistrationUrl}?code=$userValidationToken"
-          _ <- sendEmail(
-            "User creation confirmation",
-            getEmailBodyHtml(user, UserCodePurpose.NewUser, confirmUrl),
-            user,
-          )
-        } yield Response.status(Status.NoContent), // Nothing is really required back
+          existing <- userByEmail(validated.email)
+          _ <- existing match {
+            case Some(_) if config.revealExistingEmailOnRegistration =>
+              ZIO.fail(EmailAlreadyExists("That email address is already registered"))
+            case Some(user) =>
+              sendEmail("Registration attempt", getAccountExistsEmailBodyHtml(user), user)
+            case None =>
+              for {
+                user <- createUser(validated.name, validated.email, validated.password)
+                code <- issueCode(user, TokenType.NewUserCode, config.codeExpirationHours)
+                confirmUrl = s"${config.confirmRegistrationUrl}?code=$code"
+                _ <- sendEmail(
+                  "User creation confirmation",
+                  getEmailBodyHtml(user, UserCodePurpose.NewUser, confirmUrl),
+                  user,
+                )
+              } yield ()
+          }
+        } yield Response.status(Status.NoContent),
       ).mapError(AuthError(_)),
       Method.POST / config.confirmRegistrationUrl -> handler { (req: Request) =>
         for {
           confirmationCode <- req.body.as[String]
-          claim            <- jwtDecode(confirmationCode)
-          decodedUser      <- claim.decodedContent[UserCode[UserPK]]
-          _                <- activateUser(decodedUser.userPK)
-        } yield Response.status(Status.NoContent) // Nothing is really required back
+          user             <- redeemCode(confirmationCode, TokenType.NewUserCode)
+          _                <- activateUser(getPK(user))
+        } yield Response.status(Status.NoContent)
       },
       Method.GET / "api" / "clientAuthConfig" -> handler((_: Request) =>
         Response.json(
@@ -209,177 +210,209 @@ trait AuthServer[
         (for {
           loginRequest <- req.body.as[LoginRequest]
           login        <- login(loginRequest.email, loginRequest.password, loginRequest.connectionId)
-          _ <- login.fold(ZIO.logDebug(s"Bad login for ${loginRequest.email}"))(_ =>
-            ZIO.logDebug(s"Good Login for ${loginRequest.email}"),
-          )
-          res <- login.fold(ZIO.succeed {
-            Response.unauthorized("Could not log on, sorry")
-          }) { user =>
-            addTokens(
-              Session(user, loginRequest.connectionId),
-              Response.json(user.toJson),
-            )
+          res <- login.filter(mayHaveSession) match {
+            case None => ZIO.logDebug("A login failed") *> ZIO.succeed(Response.unauthorized("Could not log on, sorry"))
+            case Some(user) => addTokens(Session(user, loginRequest.connectionId), Response.json(user.toJson))
           }
         } yield res).mapError(AuthError(_))
       },
+      // A refresh token works once: it is revoked as it is used, and a new pair issued (rotation), so a stolen copy fails once the owner refreshes.
       Method.GET / config.refreshUrl -> handler { (req: Request) =>
-        // Check the refresh token from the cookie
-        // If it's valid, create a new access token and refresh token, pass them back
-        val refreshCookie = req.cookie(config.refreshTokenName).map(_.content)
         for {
-          _     <- ZIO.fail(InvalidToken("Valid refresh cookie not found")).when(refreshCookie.isEmpty)
-          claim <- jwtDecode(refreshCookie.get)
-          u     <- claim.decodedContent[Session[UserType, ConnectionId]]
-          responseWithTokens <- addTokens(
-            u,
-            Response.ok,
-          )
-        } yield responseWithTokens
+          token <- ZIO
+            .fromOption(req.cookie(config.refreshTokenName).map(_.content).filter(_.nonEmpty))
+            .orElseFail(InvalidToken("Valid refresh cookie not found"))
+          claims <- verify(token, TokenType.Refresh)
+          user   <- liveUser(claims)
+          _      <- invalidateToken(token)
+          fresh  <- addTokens(Session(user, claims.conn), Response.ok, Some(claims.session))
+        } yield fresh
       },
     ) ++ oauthRoutes
 
   /** OAuth routes for login and callback
     *
-    * These routes are only active if OAuthService is provided in the environment. If OAuthService is not available,
-    * returns empty routes (OAuth disabled).
+    *   - GET /oauth/:provider/login - starts the flow: a fresh state, bound to this browser by a short-lived cookie,
+    *     and (for providers that support it) a PKCE verifier kept with the state; redirects to the provider.
+    *   - GET /oauth/:provider/callback - accepts only a state this browser started (login CSRF), redeems the code with
+    *     the verifier, then finds, links or creates the user and starts a session.
     *
-    * Routes:
-    *   - GET /oauth/:provider/login - Initiates OAuth flow, redirects to provider
-    *   - GET /oauth/:provider/callback - Handles OAuth callback, creates/links user, returns JWT
-    *
-    * Note: This method requires OAuthService in the environment. If not provided, it will fail at runtime. Use
-    * ZLayer.succeed(OAuthService.live(None)) to disable OAuth.
+    * Logs name the provider and the step, never the callback URL (its code and state), the user's email or the tokens.
     */
   private def oauthUnauthRoutes: URIO[AuthConfig & OAuthService & OAuthStateStore, Routes[AuthConfig, AuthError]] =
     ZIO.serviceWithZIO[OAuthService] { oauthService =>
       ZIO.serviceWith[OAuthStateStore] { stateStore =>
         Routes(
-          // OAuth login initiation
           Method.GET / "oauth" / string("provider") / "login" -> handler {
             (
               provider: String,
               _:        Request,
             ) =>
               (for {
+                config        <- ZIO.service[AuthConfig]
                 oauthProvider <- oauthService.getProvider(provider)
                 state         <- oauthService.generateState()
-                _             <- stateStore.put(state, LocalDateTime.now(), provider)
-                authUrl       <- oauthProvider.generateAuthUrl(state)
+                verifier      <- Pkce.verifier.map(Option.when(oauthProvider.supportsPkce)(_))
+                now           <- Clock.instant
+                _             <- stateStore.put(state, OAuthStateStore.Entry(now, provider, verifier))
+                authUrl       <- oauthProvider.generateAuthUrl(state, verifier.map(Pkce.challenge))
                 url <- ZIO
                   .fromOption(URL.decode(authUrl).toOption)
-                  .orElseFail(AuthError(s"Invalid authorization URL: $authUrl"))
-              } yield Response.seeOther(url)).mapError(AuthError(_))
+                  .orElseFail(AuthError(s"Invalid authorization URL for $provider"))
+              } yield Response
+                .seeOther(url)
+                .addCookie(
+                  Cookie.Response(
+                    name = config.oauthStateCookieName,
+                    content = state,
+                    maxAge = Some(oauthStateLifetime),
+                    domain = None,
+                    path = Some(Path.decode("/oauth")),
+                    isSecure = config.secureCookie,
+                    isHttpOnly = true,
+                    // Lax: the provider's redirect back is a cross-site top-level navigation, which must carry it.
+                    sameSite = Some(SameSite.Lax),
+                  ),
+                )).mapError(AuthError(_))
           },
-          // OAuth callback
           Method.GET / "oauth" / string("provider") / "callback" -> handler {
             (
               provider: String,
               req:      Request,
             ) =>
               (for {
-                _ <- ZIO.logInfo(s"OAuth callback received for provider: $provider")
-                _ <- ZIO.logInfo(s"Request URL: ${req.url}")
-
-                // Extract state and provider-specific code from query parameters
+                config <- ZIO.service[AuthConfig]
                 state <- ZIO
                   .fromOption(req.url.queryParams.queryParam("state"))
                   .orElseFail(AuthError("Missing 'state' parameter"))
-
-                // Validate state (CSRF protection)
-                stateData <- stateStore.remove(state).flatMap {
-                  ZIO.fromOption(_).orElseFail(AuthError("Invalid or expired state token"))
-                }
-                (timestamp, stateProvider) = stateData
+                // Login CSRF: only the browser that started this sign-in holds the state's cookie.
+                cookie = req.cookie(config.oauthStateCookieName).map(_.content)
+                _ <- ZIO
+                  .fail(AuthError("The sign-in wasn't started in this browser"))
+                  .unless(cookie.exists(c => MessageDigest.isEqual(c.getBytes(UTF_8), state.getBytes(UTF_8))))
+                entry <- stateStore.remove(state).someOrFail(AuthError("Invalid or expired state token"))
+                now   <- Clock.instant
                 _ <- ZIO
                   .fail(AuthError("State token expired"))
-                  .when(timestamp.plusMinutes(10).isBefore(LocalDateTime.now()))
+                  .when(entry.createdAt.plus(oauthStateLifetime).isBefore(now))
                 _ <- ZIO
-                  .fail(AuthError(s"State provider mismatch: expected $stateProvider, got $provider"))
-                  .when(stateProvider != provider)
-
-                _ <- ZIO.logInfo(s"State validated successfully")
-
-                // Let provider extract its code from callback params (standard: ?code=; Telegram: widget fields)
+                  .fail(AuthError("State provider mismatch"))
+                  .when(entry.provider != provider)
                 oauthProvider <- oauthService.getProvider(provider)
-                allParams      = req.url.queryParams.map.view.mapValues(_.toList).toMap
-                code          <- oauthProvider.extractCodeFromCallback(allParams)
-
-                _ <- ZIO.logInfo(s"OAuth code and state extracted successfully")
-
-                // Exchange code for access token
-                accessToken <- oauthProvider.exchangeCodeForToken(code)
-
-                _ <- ZIO.logInfo(s"Access token obtained from provider")
-
-                // Get user info from provider
-                userInfo <- oauthProvider.getUserInfo(accessToken)
-
-                _ <- ZIO.logInfo(s"User info obtained: email=${userInfo.email}, providerId=${userInfo.providerId}")
-
-                // Find or create user
-                existingOAuthUser <- userByOAuthProvider(provider, userInfo.providerId)
-                user <- existingOAuthUser match {
-                  case Some(user) =>
-                    // User already linked with this OAuth provider
-                    ZIO.logInfo(s"Existing OAuth user found: $user") *> ZIO.succeed(user)
-
+                allParams = req.url.queryParams.map.view.mapValues(_.toList).toMap
+                code        <- oauthProvider.extractCodeFromCallback(allParams)
+                accessToken <- oauthProvider.exchangeCodeForToken(code, entry.codeVerifier)
+                userInfo    <- oauthProvider.getUserInfo(accessToken)
+                existing    <- userByOAuthProvider(provider, userInfo.providerId)
+                user <- existing match {
+                  case Some(user) => ZIO.succeed(user)
                   case None =>
-                    ZIO.logInfo(s"No existing OAuth user, checking email") *>
-                      // Check if user with same email exists (auto-linking)
-                      userByEmail(userInfo.email).flatMap {
-                        case Some(emailUser) =>
-                          // Link OAuth to existing account
-                          ZIO.logInfo(s"Linking OAuth to existing user: $emailUser") *>
-                            linkOAuthToUser(emailUser, provider, userInfo.providerId, userInfo.rawData)
-
-                        case None =>
-                          // Create new user from OAuth
-                          ZIO.logInfo(s"Creating new OAuth user") *>
-                            createOAuthUser(userInfo, provider, None)
-                      }
+                    userByEmail(userInfo.email).flatMap {
+                      case Some(emailUser) =>
+                        linkOAuthToUser(emailUser, provider, userInfo.providerId, userInfo.rawData)
+                      case None => createOAuthUser(userInfo, provider, None)
+                    }
                 }
-
-                _ <- ZIO.logInfo(s"User authenticated: $user")
-
-                // Create session and return JWT tokens
-                config <- ZIO.service[AuthConfig]
-                responseWithTokens <- addTokens(
-                  Session(user, None),
-                  Response.seeOther(URL.root), // Redirect to app
-                )
-
-                _ <- ZIO.logInfo(s"Tokens added, redirecting to: ${URL.root}")
-                _ <- ZIO.logInfo(s"Response headers: ${responseWithTokens.headers}")
-              } yield responseWithTokens)
+                _                  <- ZIO.fail(AuthError("This account can't sign in")).unless(mayHaveSession(user))
+                responseWithTokens <- addTokens(Session(user, None), Response.seeOther(URL.root))
+              } yield responseWithTokens.addCookie(Cookie.clear(config.oauthStateCookieName)))
                 .mapError(AuthError(_))
-                .tapError(e => ZIO.logError(s"OAuth callback error: ${e.getMessage}"))
+                .tapError(e => ZIO.logWarning(s"$provider sign-in failed: ${e.getMessage}"))
           },
         )
       }
     }
 
+  /** A new session for `session`'s user: an access token (bearer header) and a refresh token (HttpOnly cookie), sharing
+    * one session id (kept on a refresh, fresh on a sign-in), both carrying only the user's key and current
+    * [[sessionEpoch]].
+    */
   protected def addTokens(
-    session:  Session[UserType, ConnectionId],
-    response: Response,
-  ): URIO[AuthConfig, Response] =
+    session:   Session[UserType, ConnectionId],
+    response:  Response,
+    sessionId: Option[String] = None,
+  ): ZIO[AuthConfig, AuthError, Response] =
+    session.user match {
+      case None => ZIO.fail(NotAuthenticated)
+      case Some(user) =>
+        for {
+          config <- ZIO.service[AuthConfig]
+          sid    <- sessionId.fold(TokenClaims.randomId)(ZIO.succeed(_))
+          epoch  <- sessionEpoch(user)
+          ids    <- TokenClaims.randomId <*> TokenClaims.randomId
+          base = TokenClaims[UserPK, ConnectionId](
+            TokenType.Access,
+            getPK(user),
+            session.connectionId,
+            sid,
+            epoch,
+            ids._1,
+          )
+          accessToken  <- jwtEncode(base, config.accessTTL)
+          refreshToken <- jwtEncode(base.copy(typ = TokenType.Refresh, token = ids._2), config.refreshTTL)
+        } yield response
+          .addHeader(Header.Authorization.Bearer(accessToken))
+          .addCookie(
+            Cookie.Response(
+              name = config.refreshTokenName,
+              content = refreshToken,
+              maxAge = Option(config.refreshTTL.plus(1.hour)),
+              domain = None,
+              path = Option(Path.decode(config.refreshUrl)),
+              isSecure = config.secureCookie,
+              isHttpOnly = true,
+              sameSite = Some(SameSite.Strict),
+            ),
+          )
+    }
+
+  /** A one-use code (registration confirmation, password recovery) for `user`. */
+  private def issueCode(
+    user: UserType,
+    typ:  TokenType,
+    ttl:  Duration,
+  ): ZIO[AuthConfig, AuthError, String] =
     for {
-      config       <- ZIO.service[AuthConfig]
-      accessToken  <- jwtEncode(session, config.accessTTL)
-      refreshToken <- jwtEncode(session, config.refreshTTL)
-    } yield response
-      .addHeader(Header.Authorization.Bearer(accessToken))
-      .addCookie(
-        Cookie.Response(
-          name = config.refreshTokenName,
-          content = refreshToken,
-          maxAge = Option(config.refreshTTL.plus(1.hour)),
-          domain = None,
-          path = Option(Path.decode("/refresh")),
-          isSecure = config.secureCookie,
-          isHttpOnly = true,
-          sameSite = Some(SameSite.Strict),
-        ),
-      )
+      sid   <- TokenClaims.randomId
+      epoch <- sessionEpoch(user)
+      code  <- jwtEncode(TokenClaims[UserPK, ConnectionId](typ, getPK(user), None, sid, epoch, sid), ttl)
+    } yield code
+
+  /** The user a code of type `typ` was issued to, revoking it as it is used (#9). */
+  private def redeemCode(
+    code: String,
+    typ:  TokenType,
+  ): ZIO[AuthConfig, AuthError, UserType] =
+    for {
+      claims <- verify(code, typ)
+      user   <- userByPK(claims.user).someOrFail(InvalidToken("Code is for no account"))
+      // A recovery code also stops working once the password changes (the epoch moves on), however it was changed.
+      _ <- ZIO.fail(InvalidToken("Code no longer valid")).whenZIO(sessionEpoch(user).map(_ != claims.epoch))
+      _ <- invalidateToken(code)
+    } yield user
+
+  /** The claims of `token` if it is a valid token of type `typ`, not revoked. */
+  private def verify(
+    token: String,
+    typ:   TokenType,
+  ): ZIO[AuthConfig, AuthError, TokenClaims[UserPK, ConnectionId]] =
+    for {
+      _      <- ZIO.fail(InvalidToken("Token is invalid")).whenZIO(isInvalid(token))
+      claim  <- jwtDecode(token)
+      claims <- claim.decodedContent[TokenClaims[UserPK, ConnectionId]]
+      _      <- ZIO.fail(InvalidToken("Wrong kind of token")).when(claims.typ != typ)
+    } yield claims
+
+  /** The user `claims` speak for, read again now: refused if gone, no longer allowed a session, or signed in before its
+    * epoch moved on (#7, #9).
+    */
+  private def liveUser(claims: TokenClaims[UserPK, ConnectionId]): IO[AuthError, UserType] =
+    for {
+      user  <- userByPK(claims.user).someOrFail(InvalidToken("Session is for no account"))
+      _     <- ZIO.fail(InvalidToken("Account can't have a session")).unless(mayHaveSession(user))
+      epoch <- sessionEpoch(user)
+      _     <- ZIO.fail(InvalidToken("Session ended")).when(epoch != claims.epoch)
+    } yield user
 
   def login(
     userName:     String,
@@ -396,6 +429,22 @@ trait AuthServer[
 
   def userByEmail(email: String): IO[AuthError, Option[UserType]]
   def userByPK(pk:       UserPK): IO[AuthError, Option[UserType]]
+
+  /** Whether `user` may have a session at all (e.g. not disabled or deleted). Checked at login and on every use of a
+    * token. Default: yes.
+    */
+  def mayHaveSession(user: UserType): Boolean = true
+
+  /** The user's session epoch: tokens record it when issued and are refused once it differs. Raise it (in
+    * [[endAllSessions]], or whenever the password changes) to end every session the user has. Default: always 0, which
+    * ends nothing.
+    */
+  def sessionEpoch(user: UserType): IO[AuthError, Long] = ZIO.succeed(0L)
+
+  /** Ends every session of `userPK`, called after a password reset. Implement it by raising [[sessionEpoch]]. Default:
+    * nothing.
+    */
+  def endAllSessions(userPK: UserPK): IO[AuthError, Unit] = ZIO.unit
 
   // OAuth Methods (with default implementations that indicate OAuth is not configured)
 
@@ -441,11 +490,11 @@ trait AuthServer[
 
   /** Link an OAuth provider to an existing user account
     *
-    * This is called when a user logs in with OAuth and an account with the same email already exists (auto-linking
-    * strategy).
+    * Called when a user signs in with OAuth and an account with the same email exists. Check that the provider verified
+    * the email before linking: otherwise anyone who can make a provider account with someone's address takes over their
+    * account.
     *
-    * Default implementation fails with AuthError (OAuth not implemented). Override to support linking OAuth to existing
-    * accounts.
+    * Default implementation fails with AuthError (OAuth not implemented).
     *
     * @param user
     *   The existing user to link to
@@ -494,75 +543,57 @@ trait AuthServer[
       Jwt.encode(claim, config.secretKey.key, JwtAlgorithm.HS512)
     }
 
-  /** Creates a ZLayer containing a Session from a token string.
+  /** The session an access token speaks for, checked as for a bearer token (the user read again, its epoch,
+    * revocation).
     *
     * This is useful for WebSocket connections where the authorization header cannot be set. Instead, the token can be
     * passed as part of the subscription arguments and validated here.
-    *
-    * @param token
-    *   The JWT token string to decode
-    * @param connectionId
-    *   Optional connection ID to associate with the session
-    * @return
-    *   A ZIO that produces a ZLayer containing the decoded Session. The outer ZIO can fail with AuthError (expired
-    *   token, invalid token, etc.). The inner ZLayer is infallible once created.
     */
   def sessionLayerFromToken(
     token:        String,
     connectionId: Option[ConnectionId] = None,
   ): ZIO[AuthConfig, AuthError, ZLayer[Any, Nothing, Session[UserType, ConnectionId]]] =
     for {
-      _     <- ZIO.fail(InvalidToken("Token is invalid")).whenZIO(isInvalid(token))
-      claim <- jwtDecode(token)
-      u     <- claim.decodedContent[Session[UserType, ConnectionId]]
-      session = (u match {
-        case authenticated: AuthenticatedSession[UserType, ConnectionId] =>
-          authenticated.copy(connectionId = connectionId)
-        case unauthenticated: UnauthenticatedSession[UserType, ConnectionId] =>
-          unauthenticated.copy(connectionId = connectionId)
-      }).asInstanceOf[Session[UserType, ConnectionId]]
-    } yield ZLayer.succeed(session)
+      claims <- verify(token, TokenType.Access)
+      user   <- liveUser(claims)
+    } yield ZLayer.succeed(Session(user, connectionId))
 
   def bearerSessionProvider: HandlerAspect[AuthConfig, Session[UserType, ConnectionId]] =
     HandlerAspect.interceptIncomingHandler(Handler.fromFunctionZIO[Request] { request =>
-      val refreshUrl = URL.decode("/refresh").toOption.get
-
       val connectionId: Option[ConnectionId] =
         request.headers
           .find(_.headerName.equalsIgnoreCase("X-Connection-Id"))
           .flatMap { header =>
-            (new String(java.util.Base64.getDecoder.decode(header.renderedValue.getBytes)))
-              .fromJson[ConnectionId].toOption
+            scala.util
+              .Try(String(java.util.Base64.getDecoder.nn.decode(header.renderedValue.getBytes).nn, UTF_8))
+              .toOption
+              .flatMap(_.fromJson[ConnectionId].toOption)
           }
 
       for {
-        session <- (request.header(Header.Authorization) match {
-          // We got a bearer token, let's decode it
-          case Some(Header.Authorization.Bearer(token)) =>
+        session <- (bearer(request) match {
+          case Some(token) =>
             for {
-              _     <- ZIO.fail(InvalidToken("Token is invalid")).whenZIO(isInvalid(token.value.asString))
-              claim <- jwtDecode(token.value.asString)
-              u     <- claim.decodedContent[Session[UserType, ConnectionId]]
-            } yield (u match {
-              case authenticated: AuthenticatedSession[UserType, ConnectionId] =>
-                authenticated.copy(connectionId = connectionId)
-              case unauthenticated: UnauthenticatedSession[UserType, ConnectionId] =>
-                unauthenticated.copy(connectionId = connectionId)
-            }).asInstanceOf[Session[UserType, ConnectionId]]
-
-          case _ => ZIO.succeed(UnauthenticatedSession(connectionId = connectionId))
+              claims <- verify(token, TokenType.Access)
+              user   <- liveUser(claims)
+            } yield Session(user, connectionId)
+          case None => ZIO.succeed(UnauthenticatedSession[UserType, ConnectionId](connectionId = connectionId))
         }).catchAll {
           case _: ExpiredToken => ZIO.fail(Response.unauthorized("token_expired"))
           case _: InvalidToken => ZIO.fail(Response.unauthorized)
-          case e => ZIO.logErrorCause(Cause.fail(e)) *> ZIO.fail(Response.badRequest(e.getMessage))
+          case NotAuthenticated => ZIO.fail(Response.unauthorized)
+          case e                => ZIO.logErrorCause(Cause.fail(e)) *> ZIO.fail(Response.internalServerError)
         }
       } yield (request, session)
     })
 
-  /** A typical use of this is if you want to invalidate sessions. (works in tandem with invalidateSession)
+  /** Whether `tok` has been revoked: a logged-out session's tokens, a used refresh token, a redeemed code. Implement it
+    * with [[invalidateToken]] to make revocation work (a store of revoked tokens, or of their hashes, until they would
+    * have expired). Default: nothing is ever revoked.
     */
   def isInvalid(tok: String): IO[AuthError, Boolean] = ZIO.succeed(false)
 
+  /** Revokes `token` (see [[isInvalid]]). Default: nothing. */
   def invalidateToken(token: String): IO[AuthError, Unit] = ZIO.unit
 
   def createUser(
@@ -591,5 +622,12 @@ trait AuthServer[
         s"""Please change you password by clicking on this link:\n<a href="http://localhost:8081/#$url">http://localhost:8081/#$url</a>"""
     }
   }
+
+  /** The email sent when someone tries to register an address that already has an account: its owner learns of it, the
+    * requester learns nothing.
+    */
+  def getAccountExistsEmailBodyHtml(user: UserType): String =
+    """Someone tried to register a new account with this email address, which already has one. If it was you, sign in instead (or use
+      |"Forgot password?"). If it wasn't, you can ignore this email.""".stripMargin
 
 }

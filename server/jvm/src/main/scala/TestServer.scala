@@ -89,6 +89,7 @@ object TestServer extends ZIOApp {
     .handleErrorCause { e =>
       e.squash.match {
         case ExpiredToken(msg, _)   => Response.error(Status.Unauthorized, msg)
+        case InvalidToken(msg, _)   => Response.error(Status.Unauthorized, msg)
         case AuthBadRequest(msg, _) => Response.error(Status.BadRequest, msg)
         case FileNotFound(file)     => Response.notFound(file)
         case EmailAlreadyExists(e)  => Response.error(Status.Conflict, e)

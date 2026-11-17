@@ -95,7 +95,8 @@ object OAuthService {
               ),
             )
 
-        override def generateState(): UIO[String] = Random.nextUUID.map(_.toString.replace("-", ""))
+        // From the platform CSPRNG: a guessable state would defeat its CSRF protection (ZIO's Random isn't cryptographic).
+        override def generateState(): UIO[String] = auth.TokenClaims.randomId
 
         override def listProviders: UIO[List[String]] = ZIO.succeed(providers.keys.toList)
 

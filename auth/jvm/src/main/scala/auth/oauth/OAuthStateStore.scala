@@ -23,96 +23,62 @@ package auth.oauth
 
 import zio.*
 
-import java.time.LocalDateTime
+import java.time.Instant
 
-/** Manages OAuth state tokens for CSRF protection
-  *
-  * Stores state tokens with their timestamp and associated provider. Automatically cleans up expired states.
+/** Where OAuth states wait between the redirect to the provider and its callback: each state's creation time, provider
+  * and PKCE verifier. A state is removed when its callback uses it, or by the cleanup once it has expired.
   */
 trait OAuthStateStore {
 
-  /** Store a state token with its timestamp and provider
-    *
-    * @param state
-    *   The state token
-    * @param timestamp
-    *   When the state was created
-    * @param provider
-    *   The OAuth provider name
-    */
   def put(
-    state:     String,
-    timestamp: LocalDateTime,
-    provider:  String,
+    state: String,
+    entry: OAuthStateStore.Entry,
   ): UIO[Unit]
 
-  /** Retrieve and remove a state token
-    *
-    * @param state
-    *   The state token to retrieve
-    * @return
-    *   Some((timestamp, provider)) if found, None otherwise
-    */
-  def remove(state: String): UIO[Option[(LocalDateTime, String)]]
+  /** Takes the state's entry out (a state works once). */
+  def remove(state: String): UIO[Option[OAuthStateStore.Entry]]
 
-  /** Clean up expired state tokens
-    *
-    * @param expirationMinutes
-    *   States older than this many minutes will be removed
-    */
-  def cleanup(expirationMinutes: Int): UIO[Unit]
+  /** Drops the entries older than `lifetime`. */
+  def cleanup(lifetime: Duration): UIO[Unit]
 
 }
 
 object OAuthStateStore {
 
-  /** Live implementation using a concurrent TrieMap
+  /** A pending sign-in: when it started, with which provider, and the PKCE verifier (for providers that support PKCE).
     */
-  final case class Live(
-    store: Ref[Map[String, (LocalDateTime, String)]],
-  ) extends OAuthStateStore {
+  final case class Entry(
+    createdAt:    Instant,
+    provider:     String,
+    codeVerifier: Option[String],
+  )
+
+  final case class Live(store: Ref[Map[String, Entry]]) extends OAuthStateStore {
 
     override def put(
-      state:     String,
-      timestamp: LocalDateTime,
-      provider:  String,
-    ): UIO[Unit] = store.update(_ + (state -> (timestamp, provider)))
+      state: String,
+      entry: Entry,
+    ): UIO[Unit] = store.update(_ + (state -> entry))
 
-    override def remove(state: String): UIO[Option[(LocalDateTime, String)]] =
-      store.modify { map =>
-        (map.get(state), map - state)
-      }
+    override def remove(state: String): UIO[Option[Entry]] = store.modify(map => (map.get(state), map - state))
 
-    override def cleanup(expirationMinutes: Int): UIO[Unit] =
-      ZIO.succeed {
-        val now = LocalDateTime.now()
-        store.update { map =>
-          map.filter { case (_, (timestamp, _)) =>
-            timestamp.plusMinutes(expirationMinutes).isAfter(now)
-          }
-        }
-      }.unit
+    override def cleanup(lifetime: Duration): UIO[Unit] =
+      Clock.instant.flatMap(now =>
+        store.update(_.filter { case (_, entry) => entry.createdAt.plus(lifetime).isAfter(now) }),
+      )
 
   }
 
-  /** Create a layer that provides the OAuthStateStore service with automatic cleanup
-    *
-    * @param cleanupIntervalMinutes
-    *   How often to run cleanup (default: 5 minutes)
-    * @param expirationMinutes
-    *   How long states are valid (default: 10 minutes)
-    */
   def live(
     cleanupIntervalMinutes: Int = 5,
     expirationMinutes:      Int = 10,
   ): ZLayer[Any, Nothing, OAuthStateStore] =
     ZLayer.scoped {
       for {
-        store <- Ref.make(Map.empty[String, (LocalDateTime, String)])
+        store <- Ref.make(Map.empty[String, Entry])
         stateStore = Live(store)
-        // Start background cleanup fiber
         _ <- stateStore
-          .cleanup(expirationMinutes)
+          .cleanup(expirationMinutes.minutes)
           .repeat(Schedule.fixed(cleanupIntervalMinutes.minutes))
           .forkScoped
       } yield stateStore

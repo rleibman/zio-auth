@@ -32,7 +32,21 @@ object MockAuthEnvironment {
     users:         Ref[Map[MockUserId, MockUser]],
     emails:        Ref[Map[String, String]],
     invalidTokens: Ref[Set[String]],
+    epochs:        Ref[Map[MockUserId, Long]],
+    subjects:      Ref[List[(String, String)]],
   ) extends AuthServer[MockUser, MockUserId, MockConnectionId] {
+
+    override def sessionEpoch(user: MockUser): IO[AuthError, Long] = epochs.get.map(_.getOrElse(user.userId, 0L))
+
+    override def endAllSessions(userPK: MockUserId): IO[AuthError, Unit] =
+      epochs.update(map => map.updated(userPK, map.getOrElse(userPK, 0L) + 1))
+
+    /** Test hook: forget a user, as if deleted. */
+    def deleteUser(userPK: MockUserId): UIO[Unit] = users.update(_ - userPK)
+
+    /** Test hook: the subjects of the emails sent to `email`, oldest first. */
+    def subjectsSentTo(email: String): UIO[List[String]] =
+      subjects.get.map(_.collect { case (`email`, subject) => subject })
 
     override def getPK(user: MockUser): MockUserId = user.userId
 
@@ -69,14 +83,16 @@ object MockAuthEnvironment {
       password: String,
     ): IO[AuthError, MockUser] = {
       users.modify { map =>
+        // One past the largest id (map.size would reuse the last seeded user's id and overwrite it).
+        val id = MockUserId(map.keys.map(_.value).maxOption.getOrElse(0L) + 1)
         val newUser = MockUser(
-          userId = MockUserId(map.size),
+          userId = id,
           name = name,
           email = email,
           password = password,
         )
 
-        (newUser, map + (MockUserId(map.size) -> newUser))
+        (newUser, map + (id -> newUser))
       }
     }
 
@@ -98,7 +114,7 @@ object MockAuthEnvironment {
       user:      MockUser,
     ): IO[AuthError, Unit] = {
       val confirmUrl = extractLink(emailBody)
-      emails.update(_ + (user.email -> confirmUrl)) *> ZIO.logInfo(
+      subjects.update(_ :+ (user.email -> subject)) *> emails.update(_ + (user.email -> confirmUrl)) *> ZIO.logInfo(
         s"Sending email to ${user.email} with subject $subject and body $emailBody",
       )
     }
@@ -141,11 +157,43 @@ object MockAuthEnvironment {
                   name = "Good User 3",
                   email = "goodUser3@example.com",
                 ),
+                MockUserId(4) -> MockUser(
+                  userId = MockUserId(4),
+                  password = "goodUser4",
+                  name = "Good User 4",
+                  email = "goodUser4@example.com",
+                ),
+                MockUserId(5) -> MockUser(
+                  userId = MockUserId(5),
+                  password = "goodUser5",
+                  name = "Good User 5",
+                  email = "goodUser5@example.com",
+                ),
+                MockUserId(6) -> MockUser(
+                  userId = MockUserId(6),
+                  password = "goodUser6",
+                  name = "Good User 6",
+                  email = "goodUser6@example.com",
+                ),
+                MockUserId(7) -> MockUser(
+                  userId = MockUserId(7),
+                  password = "goodUser7",
+                  name = "Good User 7",
+                  email = "goodUser7@example.com",
+                ),
+                MockUserId(8) -> MockUser(
+                  userId = MockUserId(8),
+                  password = "goodUser8",
+                  name = "Good User 8",
+                  email = "goodUser8@example.com",
+                ),
               ),
             )
           confirmationEmails <- Ref.make(Map.empty[String, String])
           invalidTokens      <- Ref.make(Set.empty[String])
-        } yield MockAuthServer(users, confirmationEmails, invalidTokens): AuthServer[
+          epochs             <- Ref.make(Map.empty[MockUserId, Long])
+          subjects           <- Ref.make(List.empty[(String, String)])
+        } yield MockAuthServer(users, confirmationEmails, invalidTokens, epochs, subjects): AuthServer[
           MockUser,
           MockUserId,
           MockConnectionId,
