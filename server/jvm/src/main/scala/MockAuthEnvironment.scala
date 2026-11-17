@@ -73,7 +73,11 @@ object MockAuthEnvironment {
     override def userByEmail(email: String): ZIO[Any, AuthError, Option[MockUser]] =
       users.get.map(_.values.find(_.email == email))
 
-    override def isInvalid(tok: String): IO[AuthError, Boolean] = invalidTokens.get.map(_.contains(tok))
+    /** Test hook: how many times the revocation store was asked. */
+    val revocationLookups: Ref[Int] = Unsafe.unsafe(implicit unsafe => Ref.unsafe.make(0))
+
+    override def isInvalid(tok: String): IO[AuthError, Boolean] =
+      revocationLookups.update(_ + 1) *> invalidTokens.get.map(_.contains(tok))
 
     override def invalidateToken(token: String): IO[AuthError, Unit] = invalidTokens.update(tokens => tokens + token)
 
