@@ -396,11 +396,12 @@ trait AuthServer[
     token: String,
     typ:   TokenType,
   ): ZIO[AuthConfig, AuthError, TokenClaims[UserPK, ConnectionId]] =
+    // The signature and expiry first: a forged or expired token never costs the application a revocation lookup.
     for {
-      _      <- ZIO.fail(InvalidToken("Token is invalid")).whenZIO(isInvalid(token))
       claim  <- jwtDecode(token)
       claims <- claim.decodedContent[TokenClaims[UserPK, ConnectionId]]
       _      <- ZIO.fail(InvalidToken("Wrong kind of token")).when(claims.typ != typ)
+      _      <- ZIO.fail(InvalidToken("Token is invalid")).whenZIO(isInvalid(token))
     } yield claims
 
   /** The user `claims` speak for, read again now: refused if gone, no longer allowed a session, or signed in before its
@@ -588,8 +589,13 @@ trait AuthServer[
     })
 
   /** Whether `tok` has been revoked: a logged-out session's tokens, a used refresh token, a redeemed code. Implement it
-    * with [[invalidateToken]] to make revocation work (a store of revoked tokens, or of their hashes, until they would
-    * have expired). Default: nothing is ever revoked.
+    * with [[invalidateToken]] to make revocation work (a store of revoked tokens until they would have expired).
+    * Default: nothing is ever revoked.
+    *
+    * Key the store on the token's `token` claim (its unique id, in the signed payload), never on the token's text: one
+    * JWT can be spelled several ways that all verify (the signature's last Base64 character carries unused bits, and
+    * padding is optional), and a store keyed on the text misses every spelling but the one revoked. Called only for
+    * tokens whose signature and expiry have been checked.
     */
   def isInvalid(tok: String): IO[AuthError, Boolean] = ZIO.succeed(false)
 

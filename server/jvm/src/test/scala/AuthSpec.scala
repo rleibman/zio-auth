@@ -399,6 +399,17 @@ object AuthSpec extends ZIOSpec[MockAuthEnvironment] {
           fresh.status.isSuccess,
         )
       },
+      test("a forged token is refused before the revocation store is asked (no lookup for an unsigned token)") {
+        for {
+          app        <- zapp
+          authServer <- mockServer
+          before     <- authServer.revocationLookups.get
+          forged <- app.run(
+            Request.get("api/secured").addHeader(Header.Authorization.Bearer("eyJhbGciOiJIUzUxMiJ9.eyJ4IjoxfQ.forged")),
+          )
+          after <- authServer.revocationLookups.get
+        } yield assertTrue(forged.status == Status.Unauthorized, after == before)
+      },
       test("#6: a token carries the user's key, never their email or name") {
         for {
           r1 <- doLogin("goodUser4@example.com", "goodUser4")
